@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+rules:
+  - name: pos-app-ui
+    description: POSアプリのフロントエンドとUXに関するルール
+    value: |
+      Tailwind CSSで構築するモバイルファーストのUIを想定。画面遷移はスキャン → 商品詳細 → カート → 決済 → 完了の流れ。
+      商品情報が読み込めない場合は、「未登録商品」として分岐させる。
+
+  - name: pos-app-language
+    description: ユーザー向け文言のルール
+    value: |
+      ユーザー向けの文言はすべて自然な日本語で書く。「〜してください」「〜しました」など、丁寧語ベースでカジュアルすぎない。
+
+  - name: pos-app-tech-stack
+    description: 使用する技術スタック
+    value: |
+      Next.js（App Router）+ Tailwind CSS + FastAPI + MySQL の構成。
+      バーコードスキャンには react-webcam または react-qr-barcode-scanner を利用することがある。
+
+  - name: pos-app-cart-logic
+    description: 商品スキャン・購入処理のロジック
+    value: |
+      商品スキャン後、すでにカートにある商品は数量を+1する。
+      未登録商品は別画面に遷移し、「登録されていない商品です」と伝える。
+      合計金額表示は税込・税抜どちらも扱う。フォーマットは「¥4,590」のようにカンマ区切り＋円マーク。
