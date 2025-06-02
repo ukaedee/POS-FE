@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 const ScanPage = () => {
   const webcamRef = useRef<Webcam>(null);
-  const [error, setError] = useState("");
+  const [error] = useState("");
   const router = useRouter();
   const [scanning, setScanning] = useState(true);
 
@@ -39,7 +39,7 @@ const ScanPage = () => {
             .catch(() => {
               router.push("/not-found");
             });
-        } catch (e) {
+        } catch {
           // 読み取り失敗時は何もしない（継続）
         }
       }
