@@ -28,7 +28,7 @@ const ScanPage = () => {
           if (!active) return;
           setScanning(false);
           // バーコード取得後APIリクエスト
-          fetch(`/api/product/${result.getText()}`)
+          fetch(`https://app-step4-34.azurewebsites.net/product/${result.getText()}`)
             .then((res) => {
               if (res.status === 200) {
                 router.push(`/product/${result.getText()}`);

@@ -1,10 +1,6 @@
 "use client";
 import { useState } from "react";
-
-interface Product {
-  name: string;
-  price: number;
-}
+import { Product } from "@/types/product";
 
 export default function Home() {
   const [productCode, setProductCode] = useState("");
@@ -98,8 +94,11 @@ export default function Home() {
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
               <p className="font-medium">商品情報</p>
               <div className="text-sm mt-2 space-y-1">
-                <p><span className="font-medium">商品名:</span> {product.name}</p>
-                <p><span className="font-medium">価格:</span> ¥{product.price.toLocaleString()}</p>
+                <p><span className="font-medium">商品ID:</span> {product.PRD_ID}</p>
+                <p><span className="font-medium">商品コード:</span> {product.CODE}</p>
+                <p><span className="font-medium">商品名:</span> {product.NAME}</p>
+                <p><span className="font-medium">価格:</span> ¥{product.PRICE.toLocaleString()}</p>
+                <p><span className="font-medium">在庫数:</span> {product.STOCK}個</p>
               </div>
             </div>
           )}
