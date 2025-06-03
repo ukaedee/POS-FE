@@ -50,34 +50,71 @@ const ScanPage = () => {
     try {
       setError("");
       setScanCount(0);
-      console.log("ZXingでカメラアクセスを開始...");
+      console.log("カメラアクセスを開始...");
       
-      // 標準的なgetUserMediaを使用
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
+      // より詳細なカメラ設定
+      const constraints = {
+        video: {
+          facingMode: "environment", // 背面カメラ優先
+          width: { ideal: 640, min: 320 },
+          height: { ideal: 480, min: 240 },
+          frameRate: { ideal: 30, min: 10 }
+        },
+        audio: false
+      };
+      
+      console.log("getUserMedia constraints:", constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Stream obtained:", stream);
+      console.log("Video tracks:", stream.getVideoTracks());
       
       if (videoRef.current && stream) {
+        console.log("Setting stream to video element...");
         videoRef.current.srcObject = stream;
         
-        // ビデオの準備を待つ
+        // ビデオの状態をログ
+        videoRef.current.addEventListener('loadstart', () => console.log("Video loadstart"));
+        videoRef.current.addEventListener('loadeddata', () => console.log("Video loadeddata"));
+        videoRef.current.addEventListener('canplay', () => console.log("Video canplay"));
+        videoRef.current.addEventListener('play', () => console.log("Video play"));
+        
+        // メタデータ読み込み完了時
         videoRef.current.onloadedmetadata = () => {
-          console.log("ビデオメタデータがロードされました");
+          console.log("ビデオメタデータ読み込み完了");
+          console.log("Video dimensions:", {
+            width: videoRef.current?.videoWidth,
+            height: videoRef.current?.videoHeight
+          });
+          
           if (videoRef.current) {
+            // 再生開始
             videoRef.current.play().then(() => {
-              console.log("ビデオ再生開始 - スキャン開始");
+              console.log("ビデオ再生開始成功");
               setScanning(true);
-              startScanning();
+              // 少し遅延してからスキャン開始
+              setTimeout(() => {
+                startScanning();
+              }, 500);
             }).catch((playErr) => {
               console.error("ビデオ再生エラー:", playErr);
-              setError("ビデオの再生に失敗しました");
+              setError(`ビデオの再生に失敗しました: ${playErr.message}`);
             });
           }
+        };
+        
+        // エラーハンドリング
+        videoRef.current.onerror = (e) => {
+          console.error("Video element error:", e);
+          setError("ビデオの読み込みでエラーが発生しました");
         };
       }
     } catch (err) {
       console.error("Camera access error:", err);
-      setError("カメラにアクセスできませんでした。手動入力をご利用ください。");
+      if (err instanceof Error) {
+        setError(`カメラアクセスエラー: ${err.name} - ${err.message}`);
+      } else {
+        setError("カメラにアクセスできませんでした。手動入力をご利用ください。");
+      }
     }
   };
 
@@ -253,49 +290,86 @@ const ScanPage = () => {
       </div>
 
       {/* メインスキャナー部分 */}
-      <div className="relative w-80 h-80 max-w-full mb-6">
+      <div className="relative w-80 h-80 max-w-full mb-6 border-2 border-gray-600 rounded-2xl overflow-hidden">
         {scanning ? (
           <>
             <video
               ref={videoRef}
-              className="rounded-2xl object-cover w-full h-full bg-gray-800"
+              className="w-full h-full object-cover bg-gray-900"
               autoPlay
               playsInline
               muted
+              style={{
+                transform: 'scaleX(-1)', // 鏡像表示（自然な見た目）
+                minWidth: '100%',
+                minHeight: '100%'
+              }}
             />
             
             {/* スキャンエリアの枠 */}
-            <div className="absolute inset-4 border-2 border-green-400 rounded-lg animate-pulse">
-              <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400"></div>
-              <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400"></div>
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400"></div>
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400"></div>
+            <div className="absolute inset-4 border-2 border-green-400 rounded-lg">
+              <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400 animate-pulse"></div>
+              <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400 animate-pulse"></div>
+              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400 animate-pulse"></div>
+              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400 animate-pulse"></div>
+              
+              {/* 中央ライン */}
+              <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-green-400 animate-pulse transform -translate-y-1/2"></div>
             </div>
             
             {/* 停止ボタン */}
             <button
               onClick={stopCamera}
-              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
+              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
               type="button"
             >
               ❌
             </button>
             
             {/* スキャン状態表示 */}
-            <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs p-2 rounded">
+            <div className="absolute bottom-2 left-2 bg-black bg-opacity-80 text-white text-xs p-2 rounded backdrop-blur-sm">
               <p>🔍 スキャン中... ({scanCount})</p>
-              <p>📱 QRコード・バーコードを枠内に</p>
+              <p>📱 コードを枠内に合わせてください</p>
             </div>
           </>
         ) : (
-          <div className="w-full h-full bg-gray-800 rounded-2xl flex items-center justify-center">
+          <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl flex items-center justify-center">
             <div className="text-center text-white">
-              <div className="text-6xl mb-4">📱</div>
-              <p>{scannedCode ? "スキャン完了" : "スキャン待機中"}</p>
+              <div className="text-6xl mb-4">
+                {scannedCode ? "✅" : "📱"}
+              </div>
+              <p className="text-lg font-medium">
+                {scannedCode ? "スキャン完了" : "スキャン待機中"}
+              </p>
+              <p className="text-sm text-gray-400 mt-1">
+                {scannedCode ? "結果を確認してください" : "カメラを起動してください"}
+              </p>
             </div>
           </div>
         )}
       </div>
+
+      {/* デバッグ情報（開発時のみ表示） */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-4 p-3 bg-gray-800 text-white text-xs rounded-lg max-w-md w-full">
+          <h4 className="font-bold mb-2">🔧 デバッグ情報</h4>
+          <div className="space-y-1">
+            <p>マウント状態: {mounted ? "✅" : "❌"}</p>
+            <p>スキャン状態: {scanning ? "🔍 実行中" : "⏸️ 停止中"}</p>
+            <p>スキャン回数: {scanCount}</p>
+            <p>読み取りコード: {scannedCode || "なし"}</p>
+            <p>商品情報: {product ? "✅ 取得済み" : "❌ なし"}</p>
+            <p>ローディング: {loading ? "🔄" : "⏹️"}</p>
+            {videoRef.current && (
+              <div>
+                <p>ビデオ要素: ✅ 存在</p>
+                <p>ビデオサイズ: {videoRef.current.videoWidth}x{videoRef.current.videoHeight}</p>
+                <p>再生状態: {videoRef.current.paused ? "⏸️ 停止" : "▶️ 再生中"}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* メッセージエリア */}
       <div className="text-center mb-6">
