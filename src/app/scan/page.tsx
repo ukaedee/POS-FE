@@ -60,16 +60,27 @@ const ScanPage = () => {
     setError("");
     
     try {
+      console.log(`商品検索開始: ${code}`);
       const response = await fetch(`https://app-step4-34.azurewebsites.net/product/${code}`);
       
       if (response.ok) {
-        const productData: Product = await response.json();
-        setProduct(productData);
-        setError("");
+        const productData = await response.json();
+        console.log("受信した商品データ:", productData);
+        
+        // データ構造を確認してから設定
+        if (productData && typeof productData === 'object') {
+          setProduct(productData as Product);
+          setError("");
+        } else {
+          setError("商品データの形式が正しくありません");
+          setProduct(null);
+        }
       } else if (response.status === 404) {
         setError("商品が見つかりませんでした");
         setProduct(null);
       } else {
+        const errorText = await response.text();
+        console.error("APIエラーレスポンス:", errorText);
         setError(`エラーが発生しました: ${response.status}`);
         setProduct(null);
       }
@@ -237,11 +248,12 @@ const ScanPage = () => {
 
       {product && !loading && (
         <div className="bg-white rounded-lg p-4 mb-6 max-w-sm w-full">
-          <h3 className="font-bold text-lg text-gray-800 mb-2">{product.NAME}</h3>
+          <h3 className="font-bold text-lg text-gray-800 mb-2">{product.NAME || '商品名不明'}</h3>
           <div className="space-y-1 text-sm text-gray-600">
-            <p>商品コード: {product.CODE}</p>
-            <p>価格: <span className="font-bold text-green-600">¥{product.PRICE.toLocaleString()}</span></p>
-            <p>在庫: <span className={product.STOCK > 0 ? 'text-green-600' : 'text-red-600'}>{product.STOCK}個</span></p>
+            <p>商品ID: {product.PRD_ID || 'N/A'}</p>
+            <p>商品コード: {product.CODE || 'N/A'}</p>
+            <p>価格: <span className="font-bold text-green-600">¥{(product.PRICE || 0).toLocaleString()}</span></p>
+            <p>在庫: <span className={(product.STOCK || 0) > 0 ? 'text-green-600' : 'text-red-600'}>{product.STOCK || 0}個</span></p>
           </div>
         </div>
       )}
@@ -307,16 +319,25 @@ const ScanPage = () => {
           {/* サンプルコードボタン */}
           <button
             onClick={() => {
-              setManualInput("1234567890001");
-              setScannedCode("1234567890001");
+              const testCode = "1234567890001";
+              setManualInput(testCode);
+              setScannedCode(testCode);
               stopCamera();
-              fetchProduct("1234567890001");
+              fetchProduct(testCode);
             }}
             className="text-blue-400 hover:text-blue-300 underline text-sm mt-2"
             type="button"
           >
-            📝 サンプルコードを試す
+            📝 サンプルコードを試す (1234567890001)
           </button>
+          
+          {/* デバッグ情報表示 */}
+          {product && (
+            <div className="mt-2 p-2 bg-gray-700 rounded text-xs text-gray-300">
+              <p>デバッグ情報:</p>
+              <pre className="whitespace-pre-wrap">{JSON.stringify(product, null, 2)}</pre>
+            </div>
+          )}
         </div>
       </div>
     </div>
