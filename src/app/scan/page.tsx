@@ -1,6 +1,7 @@
 "use client";
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 
 interface Product {
   PRD_ID: number;
@@ -12,7 +13,6 @@ interface Product {
 
 const ScanPage = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -20,31 +20,60 @@ const ScanPage = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [manualInput, setManualInput] = useState("");
+  const [scanCount, setScanCount] = useState(0);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
   // クライアントサイドでのマウント確認
   useEffect(() => {
     setMounted(true);
+    // ZXingライブラリの初期化
+    codeReaderRef.current = new BrowserMultiFormatReader();
+    console.log("ZXing BrowserMultiFormatReader initialized");
+    
+    return () => {
+      // クリーンアップ
+      if (codeReaderRef.current) {
+        codeReaderRef.current.reset();
+      }
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
   }, []);
 
   // カメラストリームを開始
   const startCamera = async () => {
-    if (!mounted) return;
+    if (!mounted || !codeReaderRef.current) return;
     
     try {
       setError("");
+      setScanCount(0);
+      console.log("ZXingでカメラアクセスを開始...");
+      
+      // 標準的なgetUserMediaを使用
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: "environment",
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        }
+        video: { facingMode: "environment" }
       });
       
-      if (videoRef.current) {
+      if (videoRef.current && stream) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setScanning(true);
+        
+        // ビデオの準備を待つ
+        videoRef.current.onloadedmetadata = () => {
+          console.log("ビデオメタデータがロードされました");
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log("ビデオ再生開始 - スキャン開始");
+              setScanning(true);
+              startScanning();
+            }).catch((playErr) => {
+              console.error("ビデオ再生エラー:", playErr);
+              setError("ビデオの再生に失敗しました");
+            });
+          }
+        };
       }
     } catch (err) {
       console.error("Camera access error:", err);
@@ -52,13 +81,66 @@ const ScanPage = () => {
     }
   };
 
+  // ZXingを使用したスキャン開始
+  const startScanning = () => {
+    if (!codeReaderRef.current || !videoRef.current || !scanning) return;
+    
+    console.log("ZXingスキャンループ開始");
+    
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current || !codeReaderRef.current || !scanning) return;
+      
+      try {
+        setScanCount(prev => prev + 1);
+        
+        // ZXingでバーコード/QRコードを検出
+        const result = await codeReaderRef.current.decodeFromVideoElement(videoRef.current);
+        
+        if (result && result.getText()) {
+          const detectedCode = result.getText();
+          console.log("🎉 コード検出成功:", detectedCode);
+          console.log("検出フォーマット:", result.getBarcodeFormat());
+          
+          // スキャン停止
+          setScanning(false);
+          if (scanIntervalRef.current) {
+            clearInterval(scanIntervalRef.current);
+          }
+          
+          setScannedCode(detectedCode);
+          stopCamera();
+          fetchProduct(detectedCode);
+        }
+      } catch (err) {
+        // NotFoundException は正常（コードが見つからないだけ）
+        if (err instanceof NotFoundException) {
+          // 何もしない（継続スキャン）
+        } else {
+          console.error("スキャンエラー:", err);
+        }
+      }
+    }, 100); // 100msごとにスキャン
+  };
+
   // カメラストリームを停止
   const stopCamera = useCallback(() => {
+    console.log("カメラ停止");
+    
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    
     if (videoRef.current && videoRef.current.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
+    
+    if (codeReaderRef.current) {
+      codeReaderRef.current.reset();
+    }
+    
     setScanning(false);
   }, []);
 
@@ -75,7 +157,6 @@ const ScanPage = () => {
         const productData = await response.json();
         console.log("受信した商品データ:", productData);
         
-        // データ構造を確認してから設定
         if (productData && typeof productData === 'object') {
           setProduct(productData as Product);
           setError("");
@@ -100,68 +181,6 @@ const ScanPage = () => {
       setLoading(false);
     }
   };
-
-  // 簡易的なコード検出（デモ用）
-  const captureFrame = useCallback(() => {
-    if (!mounted || !videoRef.current || !canvasRef.current || !scanning) return;
-    
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx || video.readyState !== 4) return;
-    
-    try {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-      
-      // 簡易的な明度チェック（実際のコード検出の代替）
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      let totalBrightness = 0;
-      
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const r = imageData.data[i] || 0;
-        const g = imageData.data[i + 1] || 0;
-        const b = imageData.data[i + 2] || 0;
-        totalBrightness += (r + g + b) / 3;
-      }
-      const avgBrightness = totalBrightness / (imageData.data.length / 4);
-      
-      // デモ用：特定の明度条件でサンプルコードを検出
-      if (avgBrightness > 100 && avgBrightness < 150 && !scannedCode) {
-        setTimeout(() => {
-          if (scanning && !scannedCode && mounted) {
-            const demoCode = "1234567890001";
-            setScannedCode(demoCode);
-            stopCamera();
-            fetchProduct(demoCode);
-          }
-        }, 1000);
-      }
-    } catch (err) {
-      console.error("Frame capture error:", err);
-    }
-  }, [mounted, scanning, scannedCode, stopCamera]);
-
-  // フレームキャプチャのループ
-  useEffect(() => {
-    if (!mounted) return;
-    
-    let animationId: number;
-    if (scanning) {
-      const loop = () => {
-        captureFrame();
-        animationId = requestAnimationFrame(loop);
-      };
-      animationId = requestAnimationFrame(loop);
-    }
-    return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-      }
-    };
-  }, [mounted, scanning, captureFrame]);
 
   // コンポーネントのクリーンアップ
   useEffect(() => {
@@ -188,10 +207,11 @@ const ScanPage = () => {
     setProduct(null);
     setError("");
     setManualInput("");
+    setScanCount(0);
     startCamera();
   };
 
-  // 商品詳細ページへ遷移（元の機能を維持）
+  // 商品詳細ページへ遷移
   const goToProductPage = () => {
     if (product && mounted) {
       router.push(`/product/${product.CODE}`);
@@ -208,7 +228,7 @@ const ScanPage = () => {
     fetchProduct(testCode);
   };
 
-  // SSRとクライアントの不一致を防ぐため、マウント前は基本的なUIのみ表示
+  // SSRとクライアントの不一致を防ぐ
   if (!mounted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
@@ -216,7 +236,7 @@ const ScanPage = () => {
           <div className="w-full h-full bg-gray-800 rounded-2xl flex items-center justify-center">
             <div className="text-center text-white">
               <div className="text-6xl mb-4">📱</div>
-              <p>読み込み中...</p>
+              <p>ZXingライブラリ読み込み中...</p>
             </div>
           </div>
         </div>
@@ -226,24 +246,31 @@ const ScanPage = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
+      {/* ヘッダー */}
+      <div className="text-center mb-4">
+        <h1 className="text-2xl font-bold text-white mb-2">📱 QRコード・バーコードリーダー</h1>
+        <p className="text-gray-400 text-sm">ZXing-js による実際のコード認識</p>
+      </div>
+
       {/* メインスキャナー部分 */}
       <div className="relative w-80 h-80 max-w-full mb-6">
         {scanning ? (
           <>
             <video
               ref={videoRef}
-              className="rounded-2xl object-cover w-full h-full"
+              className="rounded-2xl object-cover w-full h-full bg-gray-800"
               autoPlay
               playsInline
               muted
             />
-            <canvas ref={canvasRef} className="hidden" />
             
-            {/* バーコード読取枠 */}
-            <div 
-              className="absolute top-0 left-0 w-full h-full border-4 border-white rounded-2xl pointer-events-none" 
-              style={{ boxShadow: "0 0 0 4px rgba(0,0,0,0.5) inset" }} 
-            />
+            {/* スキャンエリアの枠 */}
+            <div className="absolute inset-4 border-2 border-green-400 rounded-lg animate-pulse">
+              <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400"></div>
+              <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400"></div>
+              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400"></div>
+              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400"></div>
+            </div>
             
             {/* 停止ボタン */}
             <button
@@ -253,12 +280,18 @@ const ScanPage = () => {
             >
               ❌
             </button>
+            
+            {/* スキャン状態表示 */}
+            <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs p-2 rounded">
+              <p>🔍 スキャン中... ({scanCount})</p>
+              <p>📱 QRコード・バーコードを枠内に</p>
+            </div>
           </>
         ) : (
           <div className="w-full h-full bg-gray-800 rounded-2xl flex items-center justify-center">
             <div className="text-center text-white">
               <div className="text-6xl mb-4">📱</div>
-              <p>カメラ待機中</p>
+              <p>{scannedCode ? "スキャン完了" : "スキャン待機中"}</p>
             </div>
           </div>
         )}
@@ -267,16 +300,19 @@ const ScanPage = () => {
       {/* メッセージエリア */}
       <div className="text-center mb-6">
         {scanning ? (
-          <p className="text-white text-lg">QRコード・バーコードを枠内に合わせてください</p>
+          <div className="text-center">
+            <p className="text-green-400 text-lg">🔍 リアルタイムスキャン中</p>
+            <p className="text-gray-400 text-sm">QRコード・バーコードを枠内に合わせてください</p>
+          </div>
         ) : scannedCode ? (
           <div className="text-center">
-            <p className="text-green-400 text-lg mb-2">✅ コードを読み取りました</p>
-            <p className="text-white font-mono">{scannedCode}</p>
+            <p className="text-green-400 text-lg mb-2">✅ コードを読み取りました！</p>
+            <p className="text-white font-mono bg-gray-800 px-3 py-2 rounded">{scannedCode}</p>
           </div>
         ) : (
           <p className="text-gray-400 text-lg">スキャンを開始してください</p>
         )}
-        {error && <p className="text-red-500 mt-2">{error}</p>}
+        {error && <p className="text-red-500 mt-2 bg-red-900 bg-opacity-50 px-3 py-2 rounded">{error}</p>}
       </div>
 
       {/* 商品情報表示 */}
@@ -288,13 +324,27 @@ const ScanPage = () => {
       )}
 
       {product && !loading && (
-        <div className="bg-white rounded-lg p-4 mb-6 max-w-sm w-full">
+        <div className="bg-white rounded-lg p-4 mb-6 max-w-sm w-full shadow-xl">
           <h3 className="font-bold text-lg text-gray-800 mb-2">{product.NAME || '商品名不明'}</h3>
-          <div className="space-y-1 text-sm text-gray-600">
-            <p>商品ID: {product.PRD_ID || 'N/A'}</p>
-            <p>商品コード: {product.CODE || 'N/A'}</p>
-            <p>価格: <span className="font-bold text-green-600">¥{(product.PRICE || 0).toLocaleString()}</span></p>
-            <p>在庫: <span className={(product.STOCK || 0) > 0 ? 'text-green-600' : 'text-red-600'}>{product.STOCK || 0}個</span></p>
+          <div className="space-y-2 text-sm text-gray-600">
+            <div className="flex justify-between">
+              <span>商品ID:</span>
+              <span className="font-medium">{product.PRD_ID || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>商品コード:</span>
+              <span className="font-mono font-medium">{product.CODE || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>価格:</span>
+              <span className="font-bold text-green-600">¥{(product.PRICE || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>在庫:</span>
+              <span className={(product.STOCK || 0) > 0 ? 'text-green-600' : 'text-red-600'}>
+                {product.STOCK || 0}個
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -307,7 +357,7 @@ const ScanPage = () => {
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             type="button"
           >
-            📷 スキャン開始
+            📷 リアルタイムスキャン開始
           </button>
         )}
 
@@ -318,7 +368,7 @@ const ScanPage = () => {
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
               type="button"
             >
-              🔄 再スキャン
+              🔄 新しいコードをスキャン
             </button>
             
             {product && (
@@ -337,7 +387,7 @@ const ScanPage = () => {
         <div className="bg-gray-800 p-4 rounded-lg">
           <form onSubmit={handleManualSubmit} className="space-y-2">
             <label className="block text-white text-sm font-medium">
-              手動入力（13桁商品コード）
+              手動入力（バックアップ用）
             </label>
             <div className="flex gap-2">
               <input
@@ -363,8 +413,20 @@ const ScanPage = () => {
             className="text-blue-400 hover:text-blue-300 underline text-sm mt-2"
             type="button"
           >
-            📝 サンプルコードを試す (1234567890001)
+            📝 サンプルコードでテスト (1234567890001)
           </button>
+        </div>
+      </div>
+
+      {/* 機能説明 */}
+      <div className="mt-6 p-4 bg-blue-900 bg-opacity-50 text-white rounded-lg max-w-md w-full text-sm">
+        <h4 className="font-bold mb-2">🎯 対応コード形式</h4>
+        <div className="space-y-1 text-xs">
+          <p>• QRコード（すべてのバージョン）</p>
+          <p>• JAN/EAN バーコード（13桁）</p>
+          <p>• Code 128, Code 39</p>
+          <p>• Data Matrix, PDF417</p>
+          <p>• ITF, Codabar など</p>
         </div>
       </div>
     </div>
