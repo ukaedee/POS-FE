@@ -13,6 +13,7 @@ interface Product {
 const ScanPage = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [mounted, setMounted] = useState(false);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
@@ -21,8 +22,15 @@ const ScanPage = () => {
   const [manualInput, setManualInput] = useState("");
   const router = useRouter();
 
+  // クライアントサイドでのマウント確認
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // カメラストリームを開始
   const startCamera = async () => {
+    if (!mounted) return;
+    
     try {
       setError("");
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -95,13 +103,15 @@ const ScanPage = () => {
 
   // 簡易的なコード検出（デモ用）
   const captureFrame = useCallback(() => {
-    if (videoRef.current && canvasRef.current && scanning) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) return;
-      
+    if (!mounted || !videoRef.current || !canvasRef.current || !scanning) return;
+    
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx || video.readyState !== 4) return;
+    
+    try {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
@@ -111,9 +121,9 @@ const ScanPage = () => {
       let totalBrightness = 0;
       
       for (let i = 0; i < imageData.data.length; i += 4) {
-        const r = imageData.data[i];
-        const g = imageData.data[i + 1];
-        const b = imageData.data[i + 2];
+        const r = imageData.data[i] || 0;
+        const g = imageData.data[i + 1] || 0;
+        const b = imageData.data[i + 2] || 0;
         totalBrightness += (r + g + b) / 3;
       }
       const avgBrightness = totalBrightness / (imageData.data.length / 4);
@@ -121,7 +131,7 @@ const ScanPage = () => {
       // デモ用：特定の明度条件でサンプルコードを検出
       if (avgBrightness > 100 && avgBrightness < 150 && !scannedCode) {
         setTimeout(() => {
-          if (scanning && !scannedCode) {
+          if (scanning && !scannedCode && mounted) {
             const demoCode = "1234567890001";
             setScannedCode(demoCode);
             stopCamera();
@@ -129,11 +139,15 @@ const ScanPage = () => {
           }
         }, 1000);
       }
+    } catch (err) {
+      console.error("Frame capture error:", err);
     }
-  }, [scanning, scannedCode, stopCamera]);
+  }, [mounted, scanning, scannedCode, stopCamera]);
 
   // フレームキャプチャのループ
   useEffect(() => {
+    if (!mounted) return;
+    
     let animationId: number;
     if (scanning) {
       const loop = () => {
@@ -147,7 +161,7 @@ const ScanPage = () => {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [scanning, captureFrame]);
+  }, [mounted, scanning, captureFrame]);
 
   // コンポーネントのクリーンアップ
   useEffect(() => {
@@ -160,7 +174,7 @@ const ScanPage = () => {
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const code = manualInput.trim();
-    if (code) {
+    if (code && mounted) {
       setScannedCode(code);
       stopCamera();
       fetchProduct(code);
@@ -169,6 +183,7 @@ const ScanPage = () => {
 
   // スキャンを再開
   const restartScan = () => {
+    if (!mounted) return;
     setScannedCode("");
     setProduct(null);
     setError("");
@@ -178,10 +193,36 @@ const ScanPage = () => {
 
   // 商品詳細ページへ遷移（元の機能を維持）
   const goToProductPage = () => {
-    if (product) {
+    if (product && mounted) {
       router.push(`/product/${product.CODE}`);
     }
   };
+
+  // サンプルコードテスト
+  const handleSampleCode = () => {
+    if (!mounted) return;
+    const testCode = "1234567890001";
+    setManualInput(testCode);
+    setScannedCode(testCode);
+    stopCamera();
+    fetchProduct(testCode);
+  };
+
+  // SSRとクライアントの不一致を防ぐため、マウント前は基本的なUIのみ表示
+  if (!mounted) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
+        <div className="relative w-80 h-80 max-w-full mb-6">
+          <div className="w-full h-full bg-gray-800 rounded-2xl flex items-center justify-center">
+            <div className="text-center text-white">
+              <div className="text-6xl mb-4">📱</div>
+              <p>読み込み中...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
@@ -318,26 +359,12 @@ const ScanPage = () => {
           
           {/* サンプルコードボタン */}
           <button
-            onClick={() => {
-              const testCode = "1234567890001";
-              setManualInput(testCode);
-              setScannedCode(testCode);
-              stopCamera();
-              fetchProduct(testCode);
-            }}
+            onClick={handleSampleCode}
             className="text-blue-400 hover:text-blue-300 underline text-sm mt-2"
             type="button"
           >
             📝 サンプルコードを試す (1234567890001)
           </button>
-          
-          {/* デバッグ情報表示 */}
-          {product && (
-            <div className="mt-2 p-2 bg-gray-700 rounded text-xs text-gray-300">
-              <p>デバッグ情報:</p>
-              <pre className="whitespace-pre-wrap">{JSON.stringify(product, null, 2)}</pre>
-            </div>
-          )}
         </div>
       </div>
     </div>
