@@ -1,6 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Product } from "@/types/product";
+
+interface Product {
+  PRD_ID: number;
+  CODE: string;
+  NAME: string;
+  PRICE: number;
+  STOCK: number;
+}
 
 export default function Home() {
   const [productCode, setProductCode] = useState("");
@@ -24,6 +31,7 @@ export default function Home() {
       
       if (response.ok) {
         const data = await response.json();
+        console.log("API Response:", data); // デバッグ用ログ
         if (data) {
           setProduct(data);
         } else {
@@ -94,12 +102,19 @@ export default function Home() {
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
               <p className="font-medium">商品情報</p>
               <div className="text-sm mt-2 space-y-1">
-                <p><span className="font-medium">商品ID:</span> {product.PRD_ID}</p>
-                <p><span className="font-medium">商品コード:</span> {product.CODE}</p>
-                <p><span className="font-medium">商品名:</span> {product.NAME}</p>
-                <p><span className="font-medium">価格:</span> ¥{product.PRICE.toLocaleString()}</p>
-                <p><span className="font-medium">在庫数:</span> {product.STOCK}個</p>
+                <p><span className="font-medium">商品ID:</span> {product.PRD_ID || 'N/A'}</p>
+                <p><span className="font-medium">商品コード:</span> {product.CODE || 'N/A'}</p>
+                <p><span className="font-medium">商品名:</span> {product.NAME || 'N/A'}</p>
+                <p><span className="font-medium">価格:</span> ¥{product.PRICE ? product.PRICE.toLocaleString() : 'N/A'}</p>
+                <p><span className="font-medium">在庫:</span> {product.STOCK || 'N/A'}個</p>
               </div>
+              {/* デバッグ用：生データ表示 */}
+              <details className="mt-2">
+                <summary className="text-xs cursor-pointer">デバッグ情報</summary>
+                <pre className="text-xs mt-1 bg-gray-100 p-2 rounded overflow-auto">
+                  {JSON.stringify(product, null, 2)}
+                </pre>
+              </details>
             </div>
           )}
         </div>
