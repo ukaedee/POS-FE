@@ -300,12 +300,33 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
     codeReaderRef.current = new BrowserMultiFormatReader();
     console.log("ZXing BrowserMultiFormatReader initialized");
     
+    // クリーンアップ用に参照をキャプチャ
+    const currentVideo = videoRef.current;
+    const currentCodeReader = codeReaderRef.current;
+    const currentScanInterval = scanIntervalRef.current;
+    
     return () => {
-      if (codeReaderRef.current) {
-        codeReaderRef.current.reset();
+      // 直接的なクリーンアップ処理（循環依存を回避）
+      console.log("フック全体のクリーンアップ");
+      
+      if (currentScanInterval) {
+        clearInterval(currentScanInterval);
       }
+      
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      
+      // 安全なvideo参照
+      if (currentVideo && currentVideo.srcObject) {
+        const tracks = (currentVideo.srcObject as MediaStream).getTracks();
+        tracks.forEach(track => track.stop());
+        currentVideo.srcObject = null;
+      }
+      
+      if (currentCodeReader) {
+        currentCodeReader.reset();
       }
     };
   }, []);
@@ -316,13 +337,6 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       checkCameraPermission();
     }
   }, [mounted, checkCameraPermission]);
-
-  // クリーンアップ
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, [stopCamera]);
 
   return {
     // 状態
