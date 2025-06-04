@@ -116,38 +116,83 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
   const startScanning = useCallback(() => {
     if (!codeReaderRef.current || !videoRef.current || !scanning) return;
     
-    console.log("ZXingスキャンループ開始");
+    console.log("🔍 ZXing高精度スキャンループ開始");
     
-    scanIntervalRef.current = setInterval(async () => {
+    let consecutiveSuccesses = 0;
+    let lastDetectedCode = '';
+    let scanSpeed = 150; // 初期スキャン間隔
+    
+    const performScan = async () => {
       if (!videoRef.current || !codeReaderRef.current || !scanning) return;
       
       try {
         setScanCount(prev => prev + 1);
         
+        // ビデオの準備状態確認
+        if (videoRef.current.readyState < 2 || videoRef.current.paused) {
+          console.log("⏳ ビデオ準備中...");
+          return;
+        }
+        
         const result = await codeReaderRef.current.decodeFromVideoElement(videoRef.current);
         
         if (result && result.getText()) {
-          const detectedCode = result.getText();
-          console.log("🎉 コード検出成功:", detectedCode);
-          console.log("検出フォーマット:", result.getBarcodeFormat());
+          const detectedCode = result.getText().trim();
+          console.log("🎯 コード検出:", detectedCode, "フォーマット:", result.getBarcodeFormat());
           
-          // スキャン停止
-          setScanning(false);
-          if (scanIntervalRef.current) {
-            clearInterval(scanIntervalRef.current);
+          // 連続検証ロジック（誤検出防止）
+          if (detectedCode === lastDetectedCode) {
+            consecutiveSuccesses++;
+            console.log(`✓ 連続検証: ${consecutiveSuccesses}/2`);
+            
+            if (consecutiveSuccesses >= 2) {
+              console.log("🎉 スキャン確定:", detectedCode);
+              
+              // スキャン成功時の処理
+              setScanning(false);
+              if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current);
+                scanIntervalRef.current = null;
+              }
+              
+              // 成功フィードバック（ビープ音の代わりにコンソール）
+              console.log("🔊 スキャン成功フィードバック");
+              
+              // コールバック実行
+              onCodeDetected?.(detectedCode);
+              return;
+            }
+          } else {
+            // 新しいコードの場合は検証をリセット
+            lastDetectedCode = detectedCode;
+            consecutiveSuccesses = 1;
+            console.log("🔄 新しいコード検出、検証開始");
           }
           
-          // コールバック実行
-          onCodeDetected?.(detectedCode);
+          // 検出成功時はスキャン頻度を上げる
+          scanSpeed = Math.max(50, scanSpeed - 10);
+        } else {
+          // 何も検出されない場合は段階的にスキャン頻度を下げる
+          scanSpeed = Math.min(200, scanSpeed + 5);
+          consecutiveSuccesses = 0;
+          lastDetectedCode = '';
         }
+        
       } catch (err) {
         if (err instanceof NotFoundException) {
-          // 何もしない（継続スキャン）
+          // 通常の「何も見つからない」状態（ログ出力なし）
+          scanSpeed = Math.min(200, scanSpeed + 2);
+          consecutiveSuccesses = 0;
         } else {
-          console.error("スキャンエラー:", err);
+          console.error("⚠️ スキャンエラー:", err);
+          // エラー時は一時的にスキャン頻度を下げる
+          scanSpeed = Math.min(300, scanSpeed + 20);
         }
       }
-    }, 100);
+    };
+    
+    // 初回スキャン実行
+    scanIntervalRef.current = setInterval(performScan, scanSpeed);
   }, [scanning, onCodeDetected]);
 
   // カメラストリームを開始
@@ -174,12 +219,12 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       setScanCount(0);
       console.log("カメラアクセスを開始...");
       
-      // まず背面カメラを試行
+      // より厳密なカメラ制約設定
       let constraints = {
         video: {
-          facingMode: "environment",
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
+          facingMode: "environment", // 背面カメラ優先
+          width: { ideal: 1920, min: 640 },
+          height: { ideal: 1080, min: 480 },
           frameRate: { ideal: 30, min: 15 }
         },
         audio: false
@@ -188,14 +233,14 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       let stream: MediaStream | null = null;
       
       try {
-        console.log("背面カメラでアクセス試行...");
+        console.log("高解像度背面カメラでアクセス試行...");
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch {
-        console.log("背面カメラ失敗、フロントカメラを試行...");
-        // 背面カメラが失敗した場合はフロントカメラを試行
+        console.log("高解像度失敗、標準解像度で再試行...");
+        // 解像度を下げて再試行
         constraints = {
           video: {
-            facingMode: "user",
+            facingMode: "environment",
             width: { ideal: 1280, min: 640 },
             height: { ideal: 720, min: 480 },
             frameRate: { ideal: 30, min: 15 }
@@ -206,37 +251,79 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         try {
           stream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch {
-          console.log("フロントカメラも失敗、制約なしで試行...");
-          // 制約なしで試行
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
+          console.log("背面カメラ失敗、フロントカメラを試行...");
+          // フロントカメラで試行
+          constraints = {
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              frameRate: { ideal: 30, min: 15 }
+            },
             audio: false
-          });
+          };
+          
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+          } catch {
+            console.log("制約なしで最終試行...");
+            // 制約なしで最終試行
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                width: { min: 640 },
+                height: { min: 480 }
+              },
+              audio: false
+            });
+          }
         }
+      }
+      
+      if (!stream) {
+        throw new Error("カメラストリームの取得に失敗しました");
       }
       
       setCameraPermission('granted');
       
-      if (videoRef.current && stream) {
+      if (videoRef.current) {
         console.log("ストリームをビデオ要素に設定...");
-        videoRef.current.srcObject = stream;
         
-        videoRef.current.onloadedmetadata = () => {
+        // video要素の属性を適切に設定
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.controls = false;
+        video.disablePictureInPicture = true;
+        
+        // 明示的にデフォルト処理をONにする
+        video.defaultMuted = true;
+        video.defaultPlaybackRate = 1.0;
+        
+        // より堅牢なイベントハンドリング
+        const handleLoadedMetadata = () => {
           console.log("ビデオメタデータ読み込み完了");
-          if (videoRef.current) {
-            console.log("ビデオサイズ:", {
-              width: videoRef.current.videoWidth,
-              height: videoRef.current.videoHeight
-            });
-            
-            videoRef.current.play().then(() => {
-              console.log("ビデオ再生開始成功");
+          console.log("ビデオサイズ:", {
+            width: video.videoWidth,
+            height: video.videoHeight,
+            readyState: video.readyState
+          });
+          
+          // 明示的に再生開始
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              console.log("✅ ビデオ再生開始成功");
               setScanning(true);
+              // スキャン開始を少し遅らせる（安定性向上）
               setTimeout(() => {
-                startScanning();
-              }, 500);
+                if (mounted && !scanIntervalRef.current) {
+                  startScanning();
+                }
+              }, 1000);
             }).catch((playErr) => {
-              console.error("ビデオ再生エラー:", playErr);
+              console.error("❌ ビデオ再生エラー:", playErr);
               const errorMessage = `ビデオの再生に失敗しました: ${playErr.message}`;
               setError(errorMessage);
               onError?.(errorMessage);
@@ -244,19 +331,45 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
           }
         };
         
-        videoRef.current.onerror = (e) => {
-          console.error("Video element error:", e);
+        const handleCanPlay = () => {
+          console.log("ビデオ再生準備完了");
+          // もしまだロードされていない場合のフォールバック
+          if (video.readyState >= 2 && video.paused) {
+            video.play().catch(console.error);
+          }
+        };
+        
+        const handleError = (e: Event) => {
+          console.error("❌ Video element error:", e);
           const errorMessage = "ビデオの読み込みでエラーが発生しました";
           setError(errorMessage);
           onError?.(errorMessage);
         };
+        
+        // イベントリスナー設定
+        video.addEventListener('loadedmetadata', handleLoadedMetadata);
+        video.addEventListener('canplay', handleCanPlay);
+        video.addEventListener('error', handleError);
+        
+        // 既にメタデータが読み込まれている場合の処理
+        if (video.readyState >= 1) {
+          handleLoadedMetadata();
+        }
       }
     } catch (err) {
-      console.error("Camera access error:", err);
+      console.error("❌ Camera access error:", err);
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError') {
           setCameraPermission('denied');
           const errorMessage = "カメラへのアクセスが拒否されました。ブラウザの設定でカメラ権限を許可してください。";
+          setError(errorMessage);
+          onError?.(errorMessage);
+        } else if (err.name === 'NotFoundError') {
+          const errorMessage = "カメラデバイスが見つかりませんでした。";
+          setError(errorMessage);
+          onError?.(errorMessage);
+        } else if (err.name === 'NotReadableError') {
+          const errorMessage = "カメラが他のアプリケーションで使用中です。";
           setError(errorMessage);
           onError?.(errorMessage);
         } else {
