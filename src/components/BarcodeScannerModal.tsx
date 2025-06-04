@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, FileText, CheckCircle } from 'lucide-react';
 import { useProductScanner } from '../hooks/useProductScanner';
 
@@ -17,6 +17,9 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [manualInput, setManualInput] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successCode, setSuccessCode] = useState('');
+  
+  // timeout管理用のref
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const {
     scanning,
@@ -37,8 +40,13 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setSuccessCode(code);
       setShowSuccess(true);
       
+      // 既存のタイマーをクリア
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+      
       // 1.5秒後にモーダルを閉じてコールバック実行
-      setTimeout(() => {
+      successTimeoutRef.current = setTimeout(() => {
         onCodeDetected(code);
         handleClose();
       }, 1500);
@@ -50,6 +58,12 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // モーダルクローズ処理
   const handleClose = () => {
+    // タイマーをクリア
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = null;
+    }
+    
     stopCamera();
     setManualInput('');
     setError('');
@@ -61,10 +75,24 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   // 成功状態をリセット
   useEffect(() => {
     if (!isOpen) {
+      // タイマーをクリア
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+      }
       setShowSuccess(false);
       setSuccessCode('');
     }
   }, [isOpen]);
+
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // 手動入力の処理
   const handleManualSubmit = (e: React.FormEvent) => {
