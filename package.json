@@ -21,6 +21,7 @@
     "@types/react-dom": "^19",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "lucide-react": "^0.511.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.0.0",
