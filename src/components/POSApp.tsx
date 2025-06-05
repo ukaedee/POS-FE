@@ -1,10 +1,8 @@
 "use client";
-import React, { useState } from 'react';
-import { Camera, Package, Search, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Camera, Package, Search, CheckCircle, ArrowLeft, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
 import { Product } from '../types/product';
 import BarcodeScannerModal from './BarcodeScannerModal';
-import ProductInfoForm from './ProductInfoForm';
-import PurchaseList from './PurchaseList';
 
 // 購入アイテムの型定義
 interface PurchaseItem {
@@ -19,7 +17,425 @@ interface TransactionResult {
   timestamp: string;
 }
 
+// 画面の種類
+type AppScreen = 'home' | 'scanner' | 'product-detail' | 'cart' | 'purchase-complete';
+
+// ホーム画面コンポーネント
+const HomeScreen: React.FC<{
+  onStartScan: () => void;
+  cartItemCount: number;
+}> = ({ onStartScan, cartItemCount }) => {
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* ヘッダー */}
+      <div className="bg-white shadow-md p-6">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <Package className="w-8 h-8 text-blue-600" />
+            <h1 className="text-3xl font-bold text-gray-800">POSシステム</h1>
+          </div>
+          {cartItemCount > 0 && (
+            <div className="relative">
+              <ShoppingCart className="w-8 h-8 text-gray-600" />
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                {cartItemCount}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* メインコンテンツ */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-md w-full space-y-6">
+          <div className="text-center">
+            <div className="w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Camera className="w-16 h-16 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">商品をスキャン</h2>
+            <p className="text-gray-600">バーコードやQRコードを読み取って商品を追加</p>
+          </div>
+
+          <button
+            onClick={onStartScan}
+            className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl hover:bg-blue-700 transition-colors font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
+          >
+            <Camera className="w-6 h-6" />
+            スキャン開始
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 商品詳細画面コンポーネント
+const ProductDetailScreen: React.FC<{
+  product?: Product | null;
+  onBack: () => void;
+  onAddToCart: (product: Product, quantity: number) => void;
+  loading?: boolean;
+}> = ({ product, onBack, onAddToCart, loading = false }) => {
+  const [quantity, setQuantity] = useState(1);
+
+  const handleQuantityChange = (delta: number) => {
+    const newQuantity = quantity + delta;
+    if (newQuantity >= 1 && newQuantity <= (product?.STOCK || 999)) {
+      setQuantity(newQuantity);
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (product && quantity > 0) {
+      onAddToCart(product, quantity);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">商品情報を取得中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <div className="bg-white shadow-md p-4">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            戻る
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 text-6xl mb-4">❌</div>
+            <p className="text-gray-600 text-lg">商品が見つかりませんでした</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* ヘッダー */}
+      <div className="bg-white shadow-md p-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          戻る
+        </button>
+      </div>
+
+      {/* 商品詳細 */}
+      <div className="flex-1 p-6">
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
+            {/* 商品画像エリア */}
+            <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Package className="w-20 h-20 text-gray-400" />
+            </div>
+
+            {/* 商品情報 */}
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-gray-800">{product.NAME}</h2>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-600">商品コード</p>
+                  <p className="font-mono font-medium">{product.CODE}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">在庫数</p>
+                  <p className={`font-bold ${(product.STOCK || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {product.STOCK}個
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-gray-600 text-sm">価格</p>
+                <p className="text-3xl font-bold text-blue-600">¥{product.PRICE.toLocaleString()}</p>
+              </div>
+
+              {/* 数量選択 */}
+              <div className="space-y-3">
+                <p className="text-gray-700 font-medium">数量</p>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => handleQuantityChange(-1)}
+                    disabled={quantity <= 1}
+                    className="w-12 h-12 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded-full"
+                  >
+                    <Minus className="w-5 h-5" />
+                  </button>
+                  <span className="text-2xl font-bold w-16 text-center">{quantity}</span>
+                  <button
+                    onClick={() => handleQuantityChange(1)}
+                    disabled={quantity >= (product.STOCK || 999)}
+                    className="w-12 h-12 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded-full"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-center text-gray-600 text-sm">
+                  小計: ¥{(product.PRICE * quantity).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 追加ボタン */}
+      <div className="p-6 bg-white border-t">
+        <div className="max-w-md mx-auto">
+          <button
+            onClick={handleAddToCart}
+            disabled={(product.STOCK || 0) <= 0}
+            className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3"
+          >
+            <Plus className="w-6 h-6" />
+            {(product.STOCK || 0) <= 0 ? '在庫切れ' : 'カートに追加'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// カート画面コンポーネント
+const CartScreen: React.FC<{
+  items: PurchaseItem[];
+  onBack: () => void;
+  onUpdateQuantity: (productCode: string, quantity: number) => void;
+  onRemoveItem: (productCode: string) => void;
+  onCheckout: () => void;
+  processing?: boolean;
+}> = ({ items, onBack, onUpdateQuantity, onRemoveItem, onCheckout, processing = false }) => {
+  const totalAmount = items.reduce((sum, item) => sum + (item.product.PRICE * item.quantity), 0);
+  const tax = Math.floor(totalAmount * 0.1);
+  const taxIncludedTotal = totalAmount + tax;
+
+  const handleQuantityChange = (productCode: string, delta: number) => {
+    const item = items.find(i => i.product.CODE === productCode);
+    if (item) {
+      const newQuantity = item.quantity + delta;
+      if (newQuantity >= 1 && newQuantity <= item.product.STOCK) {
+        onUpdateQuantity(productCode, newQuantity);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* ヘッダー */}
+      <div className="bg-white shadow-md p-4">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            戻る
+          </button>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <ShoppingCart className="w-6 h-6" />
+            カート ({items.length}点)
+          </h1>
+        </div>
+      </div>
+
+      {/* 商品リスト */}
+      <div className="flex-1 p-4">
+        <div className="max-w-2xl mx-auto">
+          {items.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-600">カートに商品がありません</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {items.map((item) => (
+                <div key={item.product.CODE} className="bg-white rounded-lg p-4 shadow">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-800">{item.product.NAME}</h3>
+                      <p className="text-sm text-gray-500 font-mono">{item.product.CODE}</p>
+                      <p className="text-lg font-bold text-blue-600">¥{item.product.PRICE.toLocaleString()}</p>
+                    </div>
+                    
+                    <div className="flex flex-col items-end space-y-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleQuantityChange(item.product.CODE, -1)}
+                          disabled={item.quantity <= 1}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="w-8 text-center font-bold">{item.quantity}</span>
+                        <button
+                          onClick={() => handleQuantityChange(item.product.CODE, 1)}
+                          disabled={item.quantity >= item.product.STOCK}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      <p className="text-sm font-bold">
+                        ¥{(item.product.PRICE * item.quantity).toLocaleString()}
+                      </p>
+                      
+                      <button
+                        onClick={() => onRemoveItem(item.product.CODE)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 合計・購入ボタン */}
+      {items.length > 0 && (
+        <div className="bg-white border-t p-6">
+          <div className="max-w-2xl mx-auto space-y-4">
+            {/* 買上点数・小計・消費税・合計金額 */}
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">買上点数</span>
+                <span className="font-bold">{items.length}点</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">小計</span>
+                <span className="font-bold">¥{totalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">消費税等</span>
+                <span className="font-bold">¥{tax.toLocaleString()}</span>
+              </div>
+              <div className="text-xs text-gray-500 ml-4">
+                (10%対象 ¥{totalAmount.toLocaleString()})
+              </div>
+              <div className="text-xs text-gray-500 ml-4">
+                (内消費税 ¥{tax.toLocaleString()})
+              </div>
+              <div className="border-t pt-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xl font-bold">合計金額</span>
+                  <span className="text-2xl font-bold text-green-600">¥{taxIncludedTotal.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={onCheckout}
+              disabled={processing}
+              className="w-full bg-green-600 text-white py-4 px-6 rounded-xl hover:bg-green-700 disabled:opacity-50 font-bold text-lg flex items-center justify-center gap-3"
+            >
+              {processing ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  処理中...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-6 h-6" />
+                  購入
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 購入完了画面コンポーネント
+const PurchaseCompleteScreen: React.FC<{
+  transaction?: TransactionResult | null;
+  onReturnHome: () => void;
+}> = ({ transaction, onReturnHome }) => {
+  const [countdown, setCountdown] = useState(30);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          onReturnHome();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onReturnHome]);
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+      <div className="max-w-md w-full">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center space-y-6">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-12 h-12 text-green-600" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-gray-800">
+            購入が完了しました
+          </h1>
+          
+          <p className="text-gray-600">
+            {countdown}秒後にトップに戻ります
+          </p>
+
+          {transaction && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">取引ID</span>
+                <span className="font-mono">{transaction.transaction_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">合計金額</span>
+                <span className="font-bold">¥{transaction.total_amount.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={onReturnHome}
+            className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-medium"
+          >
+            すぐにトップに戻る
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// メインPOSアプリコンポーネント
 const POSApp: React.FC = () => {
+  // 画面状態管理
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>('home');
+  
   // モーダル状態
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   
@@ -35,7 +451,6 @@ const POSApp: React.FC = () => {
   
   // 取引完了状態
   const [lastTransaction, setLastTransaction] = useState<TransactionResult | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   // API: 商品情報を取得
   const fetchProduct = async (code: string) => {
@@ -53,22 +468,27 @@ const POSApp: React.FC = () => {
         if (productData && typeof productData === 'object') {
           setProduct(productData as Product);
           setError('');
+          setCurrentScreen('product-detail');
         } else {
           setError('商品データの形式が正しくありません');
           setProduct(null);
+          setCurrentScreen('product-detail');
         }
       } else if (response.status === 404) {
         setError('商品が見つかりませんでした');
         setProduct(null);
+        setCurrentScreen('product-detail');
       } else {
         const errorText = await response.text();
         console.error("APIエラーレスポンス:", errorText);
         setError(`エラーが発生しました: ${response.status}`);
         setProduct(null);
+        setCurrentScreen('product-detail');
       }
     } catch (err) {
       setError('商品検索でエラーが発生しました');
       setProduct(null);
+      setCurrentScreen('product-detail');
       console.error("Product fetch error:", err);
     } finally {
       setLoading(false);
@@ -76,18 +496,17 @@ const POSApp: React.FC = () => {
   };
 
   // API: 購入処理
-  const processPurchase = async (employeeCode: string) => {
+  const processPurchase = async () => {
     if (purchaseItems.length === 0) return;
     
     setProcessingPurchase(true);
     
     try {
       const purchaseData = {
-        employee_code: employeeCode,
+        emp_cd: 'guest',
         items: purchaseItems.map(item => ({
-          product_code: item.product.CODE,
-          quantity: item.quantity,
-          unit_price: item.product.PRICE
+          prd_code: item.product.CODE,
+          qty: item.quantity
         }))
       };
 
@@ -106,15 +525,14 @@ const POSApp: React.FC = () => {
         console.log("購入処理成功:", result);
         
         setLastTransaction(result);
-        setShowSuccess(true);
         
         // 購入リストをクリア
         setPurchaseItems([]);
         setProduct(null);
         setScannedCode('');
         
-        // 3秒後に成功メッセージを非表示
-        setTimeout(() => setShowSuccess(false), 3000);
+        // 購入完了画面に遷移
+        setCurrentScreen('purchase-complete');
       } else {
         const errorText = await response.text();
         console.error("購入処理エラー:", errorText);
@@ -132,6 +550,7 @@ const POSApp: React.FC = () => {
   const handleCodeDetected = (code: string) => {
     console.log('検出されたコード:', code);
     setScannedCode(code);
+    setScannerModalOpen(false);
     fetchProduct(code);
   };
 
@@ -151,9 +570,8 @@ const POSApp: React.FC = () => {
       }
     });
     
-    // 商品情報をリセット
-    setProduct(null);
-    setScannedCode('');
+    // カート画面に遷移
+    setCurrentScreen('cart');
   };
 
   // 購入リストの数量を更新
@@ -176,125 +594,99 @@ const POSApp: React.FC = () => {
 
   // 新しいスキャンを開始
   const startNewScan = () => {
-    setProduct(null);
-    setScannedCode('');
-    setError('');
     setScannerModalOpen(true);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      {/* ヘッダー */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-            <Package className="w-8 h-8 text-blue-600" />
-            POS システム
-          </h1>
-          <p className="text-gray-600 mt-2">バーコードスキャンと商品管理システム</p>
-        </div>
-      </div>
+  // ホーム画面に戻る
+  const handleReturnHome = () => {
+    setCurrentScreen('home');
+    setProduct(null);
+    setScannedCode('');
+    setError('');
+    setLastTransaction(null);
+  };
 
-      {/* 成功メッセージ */}
-      {showSuccess && lastTransaction && (
-        <div className="max-w-4xl mx-auto mb-6">
-          <div className="bg-green-100 border border-green-400 rounded-lg p-4 flex items-center gap-3">
-            <CheckCircle className="w-6 h-6 text-green-600" />
-            <div>
-              <p className="font-bold text-green-800">購入処理が完了しました！</p>
-              <p className="text-green-700 text-sm">
-                取引ID: {lastTransaction.transaction_id} | 
-                合計金額: ¥{lastTransaction.total_amount.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+  // 商品詳細画面から戻る
+  const handleBackFromProductDetail = () => {
+    setCurrentScreen('home');
+    setProduct(null);
+    setScannedCode('');
+    setError('');
+  };
 
-      {/* エラーメッセージ */}
-      {error && (
-        <div className="max-w-4xl mx-auto mb-6">
-          <div className="bg-red-100 border border-red-400 rounded-lg p-4">
-            <p className="text-red-800">{error}</p>
-          </div>
-        </div>
-      )}
+  // カート画面から戻る
+  const handleBackFromCart = () => {
+    if (product) {
+      setCurrentScreen('product-detail');
+    } else {
+      setCurrentScreen('home');
+    }
+  };
 
-      {/* メインコンテンツ */}
-      <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 左側: 商品情報とスキャナー */}
-        <div className="space-y-6">
-          {/* スキャナー起動ボタン */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <button
-              onClick={startNewScan}
-              className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg flex items-center justify-center gap-3"
-              type="button"
-            >
-              <Camera className="w-6 h-6" />
-              スキャン（カメラ）
-            </button>
-            <p className="text-gray-500 text-sm text-center mt-2">
-              バーコード・QRコードを読み取ります
-            </p>
-          </div>
-
-          {/* 商品情報フォーム */}
-          <ProductInfoForm
-            scannedCode={scannedCode}
-            product={product}
-            loading={loading}
-            onAddToPurchaseList={handleAddToPurchaseList}
+  // 画面レンダリング
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case 'home':
+        return (
+          <HomeScreen 
+            onStartScan={startNewScan}
+            cartItemCount={purchaseItems.length}
           />
-        </div>
-
-        {/* 右側: 購入リスト */}
-        <div>
-          <PurchaseList
+        );
+      
+      case 'product-detail':
+        return (
+          <ProductDetailScreen
+            product={product}
+            onBack={handleBackFromProductDetail}
+            onAddToCart={handleAddToPurchaseList}
+            loading={loading}
+          />
+        );
+      
+      case 'cart':
+        return (
+          <CartScreen
             items={purchaseItems}
+            onBack={handleBackFromCart}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
-            onProcessPurchase={processPurchase}
-            processingPurchase={processingPurchase}
+            onCheckout={processPurchase}
+            processing={processingPurchase}
           />
-        </div>
-      </div>
+        );
+      
+      case 'purchase-complete':
+        return (
+          <PurchaseCompleteScreen
+            transaction={lastTransaction}
+            onReturnHome={handleReturnHome}
+          />
+        );
+      
+      default:
+        return null;
+    }
+  };
 
-      {/* 統計情報 */}
-      <div className="max-w-4xl mx-auto mt-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Search className="w-5 h-5" />
-            セッション情報
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-blue-600">{purchaseItems.length}</p>
-              <p className="text-gray-600 text-sm">商品点数</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-green-600">
-                {purchaseItems.reduce((sum, item) => sum + item.quantity, 0)}
-              </p>
-              <p className="text-gray-600 text-sm">合計個数</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-purple-600">
-                ¥{purchaseItems.reduce((sum, item) => sum + (item.product.PRICE * item.quantity), 0).toLocaleString()}
-              </p>
-              <p className="text-gray-600 text-sm">合計金額</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-orange-600">
-                {lastTransaction ? '✅' : '⏳'}
-              </p>
-              <p className="text-gray-600 text-sm">
-                {lastTransaction ? '取引完了' : '作業中'}
-              </p>
-            </div>
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {renderScreen()}
+      
+      {/* エラーメッセージ */}
+      {error && (
+        <div className="fixed top-4 left-4 right-4 bg-red-100 border border-red-400 rounded-lg p-4 z-40 max-w-4xl mx-auto">
+          <div className="flex justify-between items-start">
+            <p className="text-red-800">{error}</p>
+            <button
+              onClick={() => setError('')}
+              className="text-red-600 hover:text-red-800 ml-4"
+            >
+              ×
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* バーコードスキャナーモーダル */}
       <BarcodeScannerModal
@@ -306,4 +698,4 @@ const POSApp: React.FC = () => {
   );
 };
 
-export default POSApp; 
+export default POSApp;
