@@ -388,7 +388,7 @@ const PurchaseCompleteScreen: React.FC<{
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [onReturnHome]);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">

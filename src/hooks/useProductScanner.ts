@@ -578,7 +578,7 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         onError?.(errorMessage);
       }
     }
-  }, [mounted, cameraPermission, requestCameraPermission, waitForVideo, startScanning, stopExistingStream, onError]);
+  }, [mounted, cameraPermission, requestCameraPermission, waitForVideo, startScanning, stopExistingStream, onError, scanning]);
 
   // カメラストリームを停止
   const stopCamera = useCallback(() => {

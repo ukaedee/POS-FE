@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, FileText, CheckCircle } from 'lucide-react';
 import { useProductScanner } from '../hooks/useProductScanner';
 
