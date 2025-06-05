@@ -28,6 +28,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     permissionChecked,
     scanCount,
     error,
+    videoReady,
     videoRef,
     startCamera,
     stopCamera,
@@ -111,6 +112,13 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     handleClose();
   };
 
+  // カメラ開始ボタン
+  const handleStartCamera = async () => {
+    console.log("カメラ開始ボタンがクリックされました");
+    console.log("現在の権限状態:", cameraPermission);
+    await startCamera();
+  };
+
   if (!isOpen || !mounted) return null;
 
   return (
@@ -134,25 +142,28 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
         {/* スキャナー部分 */}
         <div className="p-2 sm:p-4">
-          {/* カメラプレビュー - モバイル向けに高さ調整 */}
+          {/* カメラプレビュー */}
           <div className="relative w-full h-72 sm:h-80 lg:h-96 bg-black rounded-lg overflow-hidden mb-3 sm:mb-4 shadow-lg">
-            {scanning ? (
+            {/* ビデオ要素 - HTMLとJavaScript属性の両方を設定 */}
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover bg-black"
+              autoPlay
+              playsInline
+              muted
+              controls={false}
+              style={{ 
+                transform: 'scaleX(1)', // 鏡像なし
+                filter: 'brightness(1.1) contrast(1.2)' // 映像を明るく鮮明に
+              }}
+            />
+            
+            {/* スキャン中のオーバーレイ - videoReadyを条件に追加 */}
+            {scanning && videoReady && (
               <>
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover bg-black"
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{ 
-                    transform: 'scaleX(1)', // 鏡像なし
-                    filter: 'brightness(1.1) contrast(1.2)' // 映像を明るく鮮明に
-                  }}
-                />
-                
-                {/* メインスキャンエリア - モバイル向けサイズ調整 */}
+                {/* メインスキャンエリア */}
                 <div className="absolute inset-4 sm:inset-8 border-2 border-green-400 rounded-xl bg-transparent">
-                  {/* 四隅のアニメーション - モバイル向けサイズ */}
+                  {/* 四隅のアニメーション */}
                   <div className="absolute -top-1 -left-1 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 border-yellow-400 animate-pulse rounded-tl-lg"></div>
                   <div className="absolute -top-1 -right-1 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 border-yellow-400 animate-pulse rounded-tr-lg"></div>
                   <div className="absolute -bottom-1 -left-1 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 border-yellow-400 animate-pulse rounded-bl-lg"></div>
@@ -176,23 +187,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                 </div>
                 
-                {/* 成功アニメーション（スキャン成功時） */}
-                {showSuccess && (
-                  <div className="absolute inset-0 bg-green-500 bg-opacity-90 flex items-center justify-center z-20 animate-pulse">
-                    <div className="text-center text-white">
-                      <div className="mb-4 relative">
-                        <CheckCircle className="w-24 h-24 mx-auto animate-bounce" />
-                        <div className="absolute inset-0 w-24 h-24 mx-auto border-4 border-white rounded-full animate-ping"></div>
-                      </div>
-                      <h3 className="text-2xl font-bold mb-2">✅ スキャン成功！</h3>
-                      <p className="text-lg font-mono bg-black bg-opacity-40 px-4 py-2 rounded-lg">
-                        {successCode}
-                      </p>
-                      <p className="text-sm mt-2 opacity-90">商品情報を取得中...</p>
-                    </div>
-                  </div>
-                )}
-
                 {/* 上部情報エリア */}
                 <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
                   {/* スキャン状態 */}
@@ -222,18 +216,47 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     </p>
                   </div>
                 </div>
-
-                {/* デバッグ情報（開発環境のみ） - 右上に移動 */}
-                {process.env.NODE_ENV === 'development' && videoRef.current && (
-                  <div className="absolute top-2 right-2 bg-blue-900 bg-opacity-90 text-white text-xs p-2 rounded-lg shadow">
-                    <p>📹 {videoRef.current.videoWidth}×{videoRef.current.videoHeight}</p>
-                    <p>🎬 {videoRef.current.paused ? '⏸️停止' : '▶️再生'}</p>
-                    <p>📡 {videoRef.current.srcObject ? '🟢接続' : '🔴切断'}</p>
-                  </div>
-                )}
               </>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white bg-gradient-to-br from-gray-800 to-gray-900">
+            )}
+
+            {/* カメラ起動中だがまだビデオ準備未完了の状態 */}
+            {scanning && !videoReady && (
+              <div className="absolute inset-0 flex items-center justify-center text-white bg-gradient-to-br from-blue-800 to-blue-900">
+                <div className="text-center p-6">
+                  <div className="relative mb-6">
+                    <div className="w-20 h-20 mx-auto border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">📹 カメラ準備中...</h3>
+                  <p className="text-sm opacity-80 mb-2">ビデオストリームを初期化しています</p>
+                  <div className="text-xs text-blue-200">
+                    <p>• ストリーム接続中</p>
+                    <p>• ビデオ解析準備中</p>
+                    <p>• しばらくお待ちください</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 成功アニメーション（スキャン成功時） */}
+            {showSuccess && (
+              <div className="absolute inset-0 bg-green-500 bg-opacity-90 flex items-center justify-center z-20 animate-pulse">
+                <div className="text-center text-white">
+                  <div className="mb-4 relative">
+                    <CheckCircle className="w-24 h-24 mx-auto animate-bounce" />
+                    <div className="absolute inset-0 w-24 h-24 mx-auto border-4 border-white rounded-full animate-ping"></div>
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">✅ スキャン成功！</h3>
+                  <p className="text-lg font-mono bg-black bg-opacity-40 px-4 py-2 rounded-lg">
+                    {successCode}
+                  </p>
+                  <p className="text-sm mt-2 opacity-90">商品情報を取得中...</p>
+                </div>
+              </div>
+            )}
+
+            {/* カメラ未起動時の表示 */}
+            {!scanning && (
+              <div className="absolute inset-0 flex items-center justify-center text-white bg-gradient-to-br from-gray-800 to-gray-900">
                 <div className="text-center p-6">
                   <div className="relative mb-6">
                     <Camera className="w-20 h-20 mx-auto opacity-60 animate-pulse" />
@@ -241,19 +264,26 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                   <h3 className="text-xl font-bold mb-2">カメラ準備完了</h3>
                   <p className="text-sm opacity-80 mb-4">下のボタンを押してスキャンを開始</p>
-                  
-                  {/* カメラ起動ボタン - より目立つデザイン */}
-                  {cameraPermission === 'granted' && (
-                    <button
-                      onClick={startCamera}
-                      className="bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3 px-6 rounded-full hover:from-blue-700 hover:to-blue-600 transition-all duration-200 font-bold text-lg shadow-lg hover:scale-105 flex items-center gap-2 mx-auto"
-                      type="button"
-                    >
-                      <Camera className="w-6 h-6" />
-                      スキャン開始
-                    </button>
-                  )}
                 </div>
+              </div>
+            )}
+
+            {/* デバッグ情報（開発環境のみ） - 強化版 */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="absolute top-2 right-2 bg-blue-900 bg-opacity-90 text-white text-xs p-2 rounded-lg shadow max-w-48">
+                <p className="font-bold mb-1">🐛 Debug Info</p>
+                {videoRef.current && (
+                  <>
+                    <p>📹 {videoRef.current.videoWidth}×{videoRef.current.videoHeight}</p>
+                    <p>🎬 {videoRef.current.paused ? '⏸️停止' : '▶️再生'}</p>
+                    <p>📡 {videoRef.current.srcObject ? '🟢接続' : '🔴切断'}</p>
+                    <p>🎥 Ready: {videoRef.current.readyState}</p>
+                  </>
+                )}
+                <p>🔍 Scanning: {scanning ? '✅' : '❌'}</p>
+                <p>📺 VideoReady: {videoReady ? '✅' : '❌'}</p>
+                <p>🎯 ScanCount: {scanCount}</p>
+                <p>🔑 Permission: {cameraPermission}</p>
               </div>
             )}
           </div>
@@ -286,6 +316,18 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
           {/* コントロールボタン */}
           <div className="space-y-3">
+            {/* カメラ起動ボタン */}
+            {cameraPermission === 'granted' && !scanning && (
+              <button
+                onClick={handleStartCamera}
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3 px-6 rounded-full hover:from-blue-700 hover:to-blue-600 transition-all duration-200 font-bold text-lg shadow-lg hover:scale-105 flex items-center gap-2 justify-center"
+                type="button"
+              >
+                <Camera className="w-6 h-6" />
+                スキャン開始
+              </button>
+            )}
+
             {/* 権限リクエストボタン */}
             {cameraPermission === 'prompt' && (
               <button
@@ -370,4 +412,4 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   );
 };
 
-export default BarcodeScannerModal; 
+export default BarcodeScannerModal;
