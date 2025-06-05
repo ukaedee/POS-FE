@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException, DecodeHintType, BarcodeFormat } from '@zxing/library';
 
 interface UseProductScannerOptions {
   onCodeDetected?: (code: string) => void;
@@ -45,13 +45,39 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ビデオの準備完了を待機
+  // ZXingの設定を最適化
+  const initializeReader = useCallback(() => {
+    const hints = new Map();
+    
+    // サポートするバーコード形式を指定
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E
+    ]);
+    
+    // スキャン精度を向上
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    
+    // ピュアバーコード（周囲の余白なし）にも対応
+    hints.set(DecodeHintType.PURE_BARCODE, false);
+    
+    const reader = new BrowserMultiFormatReader(hints);
+    codeReaderRef.current = reader;
+    
+    console.log("🚀 ZXing BrowserMultiFormatReader initialized with enhanced settings");
+  }, []);
+
+  // ビデオの準備完了を待機（タイムアウト削除）
   const waitForVideo = useCallback((video: HTMLVideoElement): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        console.error("⏰ ビデオ準備タイムアウト");
-        reject(new Error("ビデオの準備がタイムアウトしました"));
-      }, 10000); // 10秒タイムアウト
+    return new Promise((resolve) => {
+      console.log("🎥 ビデオ準備開始（タイムアウトなし）");
       
       const checkReady = () => {
         console.log("🎥 ビデオ状態確認:", {
@@ -62,21 +88,18 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
           srcObject: !!video.srcObject
         });
         
-        if (video.readyState >= 3 && video.videoWidth > 0 && video.videoHeight > 0) {
-          clearTimeout(timeout);
+        // ビデオのメタデータが読み込まれ、サイズが取得できれば準備完了とみなす
+        if (video.readyState >= 2 && video.videoWidth > 0) {
           console.log("✅ ビデオ準備完了!");
-          setVideoReady(true);
           resolve();
-        } else if (video.readyState >= 2) {
-          // メタデータは読み込まれているが、まだ再生準備が完了していない
+        } else if (video.readyState >= 1) {
+          // メタデータは読み込まれているが、まだサイズ情報が取得できていない
           setTimeout(checkReady, 100);
         }
       };
       
       if (video.readyState >= 3 && video.videoWidth > 0) {
-        clearTimeout(timeout);
         console.log("✅ ビデオ既に準備完了!");
-        setVideoReady(true);
         resolve();
       } else {
         video.addEventListener('loadeddata', checkReady);
@@ -162,103 +185,170 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
   }, [mounted, onError]);
 
   // ZXingを使用したスキャン開始
-  const startScanning = useCallback(() => {
-    if (!codeReaderRef.current || !videoRef.current || !scanning || !videoReady) {
+  const startScanning = useCallback((forceStart = false) => {
+    // 強制開始フラグがある場合は、基本条件のみチェック
+    if (!forceStart && (!codeReaderRef.current || !videoRef.current || !scanning || !videoReady)) {
       console.log("⏸️ スキャン開始条件が満たされていません:", {
         codeReader: !!codeReaderRef.current,
         video: !!videoRef.current,
         scanning,
-        videoReady
+        videoReady,
+        forceStart
       });
       return;
     }
     
-    console.log("🔍 ZXing高精度スキャンループ開始");
+    // 強制開始の場合は最低限の条件のみチェック
+    if (forceStart && (!codeReaderRef.current || !videoRef.current)) {
+      console.log("⏸️ 強制開始でも基本条件が満たされていません:", {
+        codeReader: !!codeReaderRef.current,
+        video: !!videoRef.current
+      });
+      return;
+    }
+    
+    console.log("🔍 ZXing高精度スキャンループ開始", forceStart ? "(強制開始)" : "");
     
     let consecutiveSuccesses = 0;
     let lastDetectedCode = '';
     let scanSpeed = 150; // 初期スキャン間隔
     
     const performScan = async () => {
-      if (!videoRef.current || !codeReaderRef.current || !scanning) return;
+      if (!videoRef.current || !codeReaderRef.current) return;
       
       try {
         setScanCount(prev => prev + 1);
         
-        // ビデオの準備状態確認
-        if (videoRef.current.readyState < 2 || videoRef.current.paused || videoRef.current.videoWidth === 0) {
+        // ビデオの準備状態確認（ZXingがビデオ制御するためpausedチェックを削除）
+        if (videoRef.current.readyState < 2 || videoRef.current.videoWidth === 0) {
           console.log("⏳ ビデオ準備中...", {
             readyState: videoRef.current.readyState,
-            paused: videoRef.current.paused,
-            width: videoRef.current.videoWidth
+            videoWidth: videoRef.current.videoWidth
           });
           return;
         }
+        
+        // ZXingを使用してスキャン実行
+        const scanCountValue = scanCount; // クロージャで値をキャプチャ
+        console.log(`🔍 スキャン試行 #${scanCountValue} - ビデオサイズ: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
         
         const result = await codeReaderRef.current.decodeFromVideoElement(videoRef.current);
         
         if (result && result.getText()) {
           const detectedCode = result.getText().trim();
-          console.log("🎯 コード検出:", detectedCode, "フォーマット:", result.getBarcodeFormat());
+          const format = result.getBarcodeFormat();
+          console.log("🎯 コード検出:", {
+            code: detectedCode,
+            format: format,
+            length: detectedCode.length,
+            points: result.getResultPoints()?.length || 0
+          });
+          
+          // 有効なコードかチェック（空文字列や極端に短いコードを除外）
+          if (detectedCode.length < 3) {
+            console.log("⚠️ コードが短すぎます:", detectedCode);
+            return;
+          }
           
           // 連続検証ロジック（誤検出防止）
           if (detectedCode === lastDetectedCode) {
             consecutiveSuccesses++;
-            console.log(`✓ 連続検証: ${consecutiveSuccesses}/2`);
+            console.log(`✓ 連続検証: ${consecutiveSuccesses}/2 - コード: ${detectedCode}`);
             
             if (consecutiveSuccesses >= 2) {
-              console.log("🎉 スキャン確定:", detectedCode);
+              console.log("🎉 スキャン確定:", {
+                code: detectedCode,
+                format: format,
+                attempts: scanCountValue
+              });
               
               // スキャン成功時の処理
               setScanning(false);
               if (scanIntervalRef.current) {
-                clearInterval(scanIntervalRef.current);
+                clearTimeout(scanIntervalRef.current);
                 scanIntervalRef.current = null;
               }
               
-              // 成功フィードバック（ビープ音の代わりにコンソール）
-              console.log("🔊 スキャン成功フィードバック");
+              // 成功フィードバック
+              console.log("🔊 スキャン成功フィードバック - コード:", detectedCode);
               
-              // コールバック実行
-              onCodeDetected?.(detectedCode);
+              // 少し遅延を入れてからコールバック実行（UI更新のため）
+              setTimeout(() => {
+                onCodeDetected?.(detectedCode);
+              }, 100);
               return;
             }
           } else {
             // 新しいコードの場合は検証をリセット
             lastDetectedCode = detectedCode;
             consecutiveSuccesses = 1;
-            console.log("🔄 新しいコード検出、検証開始");
+            console.log("🔄 新しいコード検出、検証開始:", detectedCode);
           }
           
           // 検出成功時はスキャン頻度を上げる
-          scanSpeed = Math.max(50, scanSpeed - 10);
+          scanSpeed = Math.max(100, scanSpeed - 10);
         } else {
           // 何も検出されない場合は段階的にスキャン頻度を下げる
-          scanSpeed = Math.min(200, scanSpeed + 5);
+          scanSpeed = Math.min(300, scanSpeed + 5);
           consecutiveSuccesses = 0;
           lastDetectedCode = '';
         }
         
       } catch (err) {
         if (err instanceof NotFoundException) {
-          // 通常の「何も見つからない」状態（ログ出力なし）
-          scanSpeed = Math.min(200, scanSpeed + 2);
+          // 通常の「何も見つからない」状態（ログ出力を減らす）
+          const currentScanCount = scanCount;
+          if (currentScanCount % 50 === 0) { // 50回に1回だけログ出力
+            console.log(`📊 スキャン状況: ${currentScanCount}回試行中 - 現在の間隔: ${scanSpeed}ms`);
+          }
+          scanSpeed = Math.min(250, scanSpeed + 2);
           consecutiveSuccesses = 0;
         } else {
-          console.error("⚠️ スキャンエラー:", err);
+          console.error("⚠️ スキャンエラー:", {
+            error: err,
+            message: err instanceof Error ? err.message : String(err),
+            scanCount,
+            videoReady: !!videoRef.current && videoRef.current.readyState >= 2
+          });
           // エラー時は一時的にスキャン頻度を下げる
-          scanSpeed = Math.min(300, scanSpeed + 20);
+          scanSpeed = Math.min(400, scanSpeed + 30);
         }
       }
     };
     
     // 初回スキャン実行
-    scanIntervalRef.current = setInterval(performScan, scanSpeed);
-  }, [scanning, videoReady, onCodeDetected]);
+    let dynamicScanSpeed = scanSpeed;
+    
+    const scanLoop = () => {
+      if (!videoRef.current || !codeReaderRef.current) {
+        return;
+      }
+      
+      performScan().then(() => {
+        // 動的に間隔を調整
+        dynamicScanSpeed = scanSpeed;
+        
+        // 次のスキャンをスケジュール
+        if (scanIntervalRef.current === null) { // scanning状態に依存しない
+          scanIntervalRef.current = setTimeout(scanLoop, dynamicScanSpeed);
+        }
+      });
+    };
+    
+    // 初回実行
+    scanLoop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onCodeDetected, scanCount]);
 
   // 既存ストリームの確実な停止
   const stopExistingStream = useCallback(() => {
     console.log("🛑 既存ストリーム停止処理");
+    
+    // スキャンも停止
+    if (scanIntervalRef.current) {
+      clearTimeout(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
     
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
@@ -268,11 +358,14 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       streamRef.current = null;
     }
     
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+    // videoRef.currentを事前に変数に保存
+    const currentVideo = videoRef.current;
+    if (currentVideo) {
+      currentVideo.srcObject = null;
     }
     
     setVideoReady(false);
+    setScanning(false);
   }, []);
 
   // カメラストリームを開始
@@ -313,7 +406,11 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
           facingMode: "environment", // 背面カメラ優先
           width: { ideal: 1920, min: 640 },
           height: { ideal: 1080, min: 480 },
-          frameRate: { ideal: 30, min: 15 }
+          frameRate: { ideal: 30, min: 15 },
+          // 接続維持のための追加設定
+          autoGainControl: false, // 自動ゲイン制御を無効化
+          noiseSuppression: false, // ノイズ抑制を無効化（カメラ専用）
+          echoCancellation: false // エコーキャンセル無効化（カメラ専用）
         },
         audio: false
       };
@@ -331,7 +428,10 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
             facingMode: "environment",
             width: { ideal: 1280, min: 640 },
             height: { ideal: 720, min: 480 },
-            frameRate: { ideal: 30, min: 15 }
+            frameRate: { ideal: 30, min: 15 },
+            autoGainControl: false,
+            noiseSuppression: false,
+            echoCancellation: false
           },
           audio: false
         };
@@ -346,7 +446,10 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
               facingMode: "user",
               width: { ideal: 1280, min: 640 },
               height: { ideal: 720, min: 480 },
-              frameRate: { ideal: 30, min: 15 }
+              frameRate: { ideal: 30, min: 15 },
+              autoGainControl: false,
+              noiseSuppression: false,
+              echoCancellation: false
             },
             audio: false
           };
@@ -359,7 +462,8 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
                 width: { min: 640 },
-                height: { min: 480 }
+                height: { min: 480 },
+                autoGainControl: false
               },
               audio: false
             });
@@ -370,6 +474,22 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       if (!stream) {
         throw new Error("カメラストリームの取得に失敗しました");
       }
+
+      // ストリームの接続維持設定
+      stream.getTracks().forEach(track => {
+        console.log("🔧 トラック設定:", track.kind, track.label);
+        // トラックが終了した時の再接続処理
+        track.onended = () => {
+          console.warn("⚠️ カメラトラックが終了しました。再接続を試行します。");
+          // 自動再接続（必要に応じて）
+          if (scanning) {
+            setTimeout(() => {
+              console.log("🔄 カメラ自動再接続開始");
+              startCamera();
+            }, 1000);
+          }
+        };
+      });
       
       streamRef.current = stream;
       setCameraPermission('granted');
@@ -379,9 +499,8 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         
         const video = videoRef.current;
         
-        // HTMLの属性とJavaScriptプロパティの両方を設定
+        // HTMLの属性とJavaScriptプロパティを設定
         video.srcObject = stream;
-        video.autoplay = true;
         video.playsInline = true;
         video.muted = true;
         video.controls = false;
@@ -390,32 +509,37 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         video.defaultPlaybackRate = 1.0;
         
         // 属性も明示的に設定
-        video.setAttribute('autoplay', '');
         video.setAttribute('playsinline', '');
         video.setAttribute('muted', '');
+        
+        // 接続維持のためのイベントリスナー追加
+        video.addEventListener('pause', () => {
+          console.log("🎬 ビデオが一時停止されました");
+          if (scanning && !video.ended) {
+            console.log("🔄 スキャン中のビデオ再生を再開");
+            video.play().catch(err => console.error("再生再開エラー:", err));
+          }
+        });
+        
+        video.addEventListener('ended', () => {
+          console.warn("⚠️ ビデオストリームが終了しました");
+        });
         
         console.log("⏳ ビデオ再生開始を待機中...");
         
         try {
-          // 明示的に再生開始
-          const playPromise = video.play();
-          if (playPromise !== undefined) {
-            await playPromise;
-            console.log("✅ ビデオ再生開始成功");
-          }
-          
           // ビデオの準備完了を待機
           await waitForVideo(video);
           
           console.log("🎬 ビデオ完全準備完了、スキャン開始");
-          setScanning(true);
           
-          // スキャン開始を適切な遅延で実行
-          setTimeout(() => {
-            if (mounted && videoRef.current && !scanIntervalRef.current) {
-              startScanning();
-            }
-          }, 1500); // より安全な遅延
+          // 状態を更新
+          setScanning(true);
+          setVideoReady(true);
+          
+          // スキャン開始を即座に実行（強制開始フラグ付き）
+          console.log("🚀 スキャンを強制開始します");
+          startScanning(true);
           
         } catch (playErr) {
           console.error("❌ ビデオ再生エラー:", playErr);
@@ -461,7 +585,7 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
     console.log("🛑 カメラ停止");
     
     if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
+      clearTimeout(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
     
@@ -478,14 +602,16 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
   // 初期化
   useEffect(() => {
     setMounted(true);
-    codeReaderRef.current = new BrowserMultiFormatReader();
-    console.log("🚀 ZXing BrowserMultiFormatReader initialized");
+    initializeReader();
+    
+    // cleanup用にvideoRefをキャプチャ
+    const videoRefForCleanup = videoRef;
     
     return () => {
       console.log("🧹 フック全体のクリーンアップ");
       
       if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
+        clearTimeout(scanIntervalRef.current);
         scanIntervalRef.current = null;
       }
       
@@ -494,15 +620,17 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         streamRef.current = null;
       }
       
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject = null;
+      // videoRef.currentを事前に変数に保存
+      const currentVideo = videoRefForCleanup.current;
+      if (currentVideo && currentVideo.srcObject) {
+        currentVideo.srcObject = null;
       }
       
       if (codeReaderRef.current) {
         codeReaderRef.current.reset();
       }
     };
-  }, []);
+  }, [initializeReader]);
 
   // マウント後に権限状態を確認
   useEffect(() => {

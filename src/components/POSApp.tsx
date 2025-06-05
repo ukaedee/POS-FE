@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { Camera, Package, Search, CheckCircle, ArrowLeft, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Camera, Package, CheckCircle, ArrowLeft, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
 import { Product } from '../types/product';
 import BarcodeScannerModal from './BarcodeScannerModal';
 
@@ -388,7 +388,7 @@ const PurchaseCompleteScreen: React.FC<{
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onReturnHome]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
@@ -410,11 +410,13 @@ const PurchaseCompleteScreen: React.FC<{
             <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">取引ID</span>
-                <span className="font-mono">{transaction.transaction_id}</span>
+                <span className="font-mono">{transaction.transaction_id || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">合計金額</span>
-                <span className="font-bold">¥{transaction.total_amount.toLocaleString()}</span>
+                <span className="font-bold">
+                  ¥{transaction.total_amount ? transaction.total_amount.toLocaleString() : '0'}
+                </span>
               </div>
             </div>
           )}
@@ -440,7 +442,6 @@ const POSApp: React.FC = () => {
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   
   // 商品関連状態
-  const [scannedCode, setScannedCode] = useState('');
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -451,6 +452,14 @@ const POSApp: React.FC = () => {
   
   // 取引完了状態
   const [lastTransaction, setLastTransaction] = useState<TransactionResult | null>(null);
+
+  // ホーム画面に戻る（useCallbackでメモ化）
+  const handleReturnHome = useCallback(() => {
+    setCurrentScreen('home');
+    setProduct(null);
+    setError('');
+    setLastTransaction(null);
+  }, []);
 
   // API: 商品情報を取得
   const fetchProduct = async (code: string) => {
@@ -529,7 +538,6 @@ const POSApp: React.FC = () => {
         // 購入リストをクリア
         setPurchaseItems([]);
         setProduct(null);
-        setScannedCode('');
         
         // 購入完了画面に遷移
         setCurrentScreen('purchase-complete');
@@ -544,14 +552,6 @@ const POSApp: React.FC = () => {
     } finally {
       setProcessingPurchase(false);
     }
-  };
-
-  // スキャナーからのコード検出処理
-  const handleCodeDetected = (code: string) => {
-    console.log('検出されたコード:', code);
-    setScannedCode(code);
-    setScannerModalOpen(false);
-    fetchProduct(code);
   };
 
   // 購入リストに商品を追加
@@ -597,20 +597,10 @@ const POSApp: React.FC = () => {
     setScannerModalOpen(true);
   };
 
-  // ホーム画面に戻る
-  const handleReturnHome = () => {
-    setCurrentScreen('home');
-    setProduct(null);
-    setScannedCode('');
-    setError('');
-    setLastTransaction(null);
-  };
-
   // 商品詳細画面から戻る
   const handleBackFromProductDetail = () => {
     setCurrentScreen('home');
     setProduct(null);
-    setScannedCode('');
     setError('');
   };
 
@@ -692,7 +682,7 @@ const POSApp: React.FC = () => {
       <BarcodeScannerModal
         isOpen={scannerModalOpen}
         onClose={() => setScannerModalOpen(false)}
-        onCodeDetected={handleCodeDetected}
+        onCodeDetected={fetchProduct}
       />
     </div>
   );
