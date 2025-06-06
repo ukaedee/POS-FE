@@ -19,6 +19,7 @@
     "@types/node": "^20.17.57",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19",
+    "@yudiel/react-qr-scanner": "^2.3.1",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^0.511.0",

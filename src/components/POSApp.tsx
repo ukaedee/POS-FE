@@ -453,12 +453,16 @@ const POSApp: React.FC = () => {
   // 取引完了状態
   const [lastTransaction, setLastTransaction] = useState<TransactionResult | null>(null);
 
+  // 認証状態
+  const [authenticating, setAuthenticating] = useState(false);
+
   // ホーム画面に戻る（useCallbackでメモ化）
   const handleReturnHome = useCallback(() => {
     setCurrentScreen('home');
     setProduct(null);
     setError('');
     setLastTransaction(null);
+    setAuthenticating(false);
   }, []);
 
   // API: 商品情報を取得
@@ -501,7 +505,24 @@ const POSApp: React.FC = () => {
       console.error("Product fetch error:", err);
     } finally {
       setLoading(false);
+      setAuthenticating(false);
     }
+  };
+
+  // QRコード検出時の処理（認証アニメーション付き）
+  const handleCodeDetected = async (code: string) => {
+    console.log(`📱 コード検出: ${code}`);
+    
+    // スキャナーモーダルを閉じる
+    setScannerModalOpen(false);
+    
+    // 認証アニメーション開始
+    setAuthenticating(true);
+    
+    // 0.8秒待ってから認証API呼び出し
+    setTimeout(() => {
+      fetchProduct(code);
+    }, 800);
   };
 
   // API: 購入処理
@@ -678,11 +699,24 @@ const POSApp: React.FC = () => {
         </div>
       )}
 
+      {/* 認証中モーダル */}
+      {authenticating && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-sm mx-4 text-center">
+            <div className="mb-6">
+              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">認証中...</h3>
+            <p className="text-gray-600 text-sm">商品情報を確認しています</p>
+          </div>
+        </div>
+      )}
+
       {/* バーコードスキャナーモーダル */}
       <BarcodeScannerModal
         isOpen={scannerModalOpen}
         onClose={() => setScannerModalOpen(false)}
-        onCodeDetected={fetchProduct}
+        onCodeDetected={handleCodeDetected}
       />
     </div>
   );

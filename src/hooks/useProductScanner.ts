@@ -74,46 +74,6 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
     console.log("🚀 ZXing BrowserMultiFormatReader initialized with enhanced settings");
   }, []);
 
-  // ビデオの準備完了を待機（タイムアウト削除）
-  const waitForVideo = useCallback((video: HTMLVideoElement): Promise<void> => {
-    return new Promise((resolve) => {
-      console.log("🎥 ビデオ準備開始（タイムアウトなし）");
-      
-      const checkReady = () => {
-        console.log("🎥 ビデオ状態確認:", {
-          readyState: video.readyState,
-          videoWidth: video.videoWidth,
-          videoHeight: video.videoHeight,
-          paused: video.paused,
-          srcObject: !!video.srcObject
-        });
-        
-        // ビデオのメタデータが読み込まれ、サイズが取得できれば準備完了とみなす
-        if (video.readyState >= 2 && video.videoWidth > 0) {
-          console.log("✅ ビデオ準備完了!");
-          resolve();
-        } else if (video.readyState >= 1) {
-          // メタデータは読み込まれているが、まだサイズ情報が取得できていない
-          setTimeout(checkReady, 100);
-        }
-      };
-      
-      if (video.readyState >= 3 && video.videoWidth > 0) {
-        console.log("✅ ビデオ既に準備完了!");
-        resolve();
-      } else {
-        video.addEventListener('loadeddata', checkReady);
-        video.addEventListener('canplay', checkReady);
-        video.addEventListener('playing', checkReady);
-        
-        // 既にメタデータがある場合は即座にチェック
-        if (video.readyState >= 1) {
-          checkReady();
-        }
-      }
-    });
-  }, []);
-
   // カメラ権限の状態を確認
   const checkCameraPermission = useCallback(async () => {
     if (!mounted) return;
@@ -219,20 +179,47 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       try {
         setScanCount(prev => prev + 1);
         
-        // ビデオの準備状態確認（ZXingがビデオ制御するためpausedチェックを削除）
-        if (videoRef.current.readyState < 2 || videoRef.current.videoWidth === 0) {
-          console.log("⏳ ビデオ準備中...", {
-            readyState: videoRef.current.readyState,
-            videoWidth: videoRef.current.videoWidth
-          });
+        // ビデオの準備状態確認（より緩和された条件）
+        const videoElement = videoRef.current;
+        const videoState = {
+          readyState: videoElement.readyState,
+          videoWidth: videoElement.videoWidth,
+          videoHeight: videoElement.videoHeight,
+          paused: videoElement.paused,
+          ended: videoElement.ended,
+          currentTime: videoElement.currentTime,
+          srcObject: !!videoElement.srcObject
+        };
+        
+        console.log(`🔍 スキャン試行 #${scanCount} - ビデオ状態:`, videoState);
+        
+        // readyState >= 2 (HAVE_CURRENT_DATA) があれば試行
+        // videoWidth = 0 でも一度は試行してみる（一部の環境では動作する場合がある）
+        if (videoElement.readyState < 2) {
+          console.log("⏳ ビデオ準備中... readyState不足");
           return;
         }
         
-        // ZXingを使用してスキャン実行
-        const scanCountValue = scanCount; // クロージャで値をキャプチャ
-        console.log(`🔍 スキャン試行 #${scanCountValue} - ビデオサイズ: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+        if (videoElement.paused) {
+          console.log("⏸️ ビデオが一時停止中 - 再生を試行");
+          try {
+            await videoElement.play();
+          } catch (playErr) {
+            console.warn("⚠️ ビデオ再生失敗:", playErr);
+          }
+          return;
+        }
         
-        const result = await codeReaderRef.current.decodeFromVideoElement(videoRef.current);
+        // ZXingを使用してスキャン実行（videoWidth = 0 でも試行）
+        console.log(`🎯 ZXing decodeFromVideoElement 実行 - ビデオサイズ: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+        
+        // スキャン前の最終チェック
+        if (!videoElement.srcObject) {
+          console.warn("⚠️ srcObject が null です");
+          return;
+        }
+        
+        const result = await codeReaderRef.current.decodeFromVideoElement(videoElement);
         
         if (result && result.getText()) {
           const detectedCode = result.getText().trim();
@@ -241,7 +228,8 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
             code: detectedCode,
             format: format,
             length: detectedCode.length,
-            points: result.getResultPoints()?.length || 0
+            points: result.getResultPoints()?.length || 0,
+            videoSize: `${videoElement.videoWidth}x${videoElement.videoHeight}`
           });
           
           // 有効なコードかチェック（空文字列や極端に短いコードを除外）
@@ -259,7 +247,7 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
               console.log("🎉 スキャン確定:", {
                 code: detectedCode,
                 format: format,
-                attempts: scanCountValue
+                attempts: scanCount
               });
               
               // スキャン成功時の処理
@@ -307,8 +295,10 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
           console.error("⚠️ スキャンエラー:", {
             error: err,
             message: err instanceof Error ? err.message : String(err),
+            name: err instanceof Error ? err.name : 'Unknown',
             scanCount,
-            videoReady: !!videoRef.current && videoRef.current.readyState >= 2
+            videoReady: !!videoRef.current && videoRef.current.readyState >= 2,
+            videoSize: videoRef.current ? `${videoRef.current.videoWidth}x${videoRef.current.videoHeight}` : 'N/A'
           });
           // エラー時は一時的にスキャン頻度を下げる
           scanSpeed = Math.min(400, scanSpeed + 30);
@@ -372,6 +362,25 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
   const startCamera = useCallback(async () => {
     if (!mounted || !codeReaderRef.current) {
       console.log("❌ 初期化未完了");
+      return;
+    }
+    
+    // videoRef が存在しない場合は待機
+    if (!videoRef.current) {
+      console.log("⏳ videoRef準備待機中...");
+      setTimeout(() => startCamera(), 100);
+      return;
+    }
+
+    // すでにカメラが起動している場合はスキップ
+    if (streamRef.current && streamRef.current.active) {
+      console.log("📹 カメラはすでに起動済み");
+      if (videoRef.current && !videoRef.current.srcObject) {
+        console.log("🔄 既存のストリームをvideoRefに再設定");
+        videoRef.current.srcObject = streamRef.current;
+        setVideoReady(true);
+        setScanning(true);
+      }
       return;
     }
     
@@ -491,6 +500,7 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         };
       });
       
+      // ストリームを保存
       streamRef.current = stream;
       setCameraPermission('granted');
       
@@ -499,8 +509,21 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         
         const video = videoRef.current;
         
-        // HTMLの属性とJavaScriptプロパティを設定
+        // デバッグ：設定前の状態
+        console.log("📊 ビデオ設定前の状態:", {
+          srcObject: !!video.srcObject,
+          readyState: video.readyState,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          paused: video.paused,
+          currentTime: video.currentTime
+        });
+        
+        // 🎯 確実にsrcObjectを設定
+        console.log("📹 videoRef.current.srcObject にストリームを設定");
         video.srcObject = stream;
+        
+        // HTMLの属性とJavaScriptプロパティを設定
         video.playsInline = true;
         video.muted = true;
         video.controls = false;
@@ -511,6 +534,158 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         // 属性も明示的に設定
         video.setAttribute('playsinline', '');
         video.setAttribute('muted', '');
+        
+        // デバッグ：設定後の状態
+        console.log("📊 ビデオ設定後の状態:", {
+          srcObject: !!video.srcObject,
+          readyState: video.readyState,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          paused: video.paused,
+          streamTracks: stream.getTracks().length
+        });
+        
+        // 🎯 onloadedmetadata イベントで play() を呼び出し
+        const handleLoadedMetadata = async () => {
+          console.log("🎯 ビデオメタデータ読み込み完了:", {
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight,
+            duration: video.duration,
+            readyState: video.readyState
+          });
+          
+          try {
+            console.log("🎬 onloadedmetadata内でvideo.play()を呼び出し");
+            await video.play();
+            console.log("✅ ビデオ再生成功");
+            
+            // 🎯 videoReady を true に更新
+            setVideoReady(true);
+            setScanning(true);
+            
+            // 最終的なデバッグ情報
+            console.log("📊 最終ビデオ状態:", {
+              srcObject: !!video.srcObject,
+              readyState: video.readyState,
+              videoWidth: video.videoWidth,
+              videoHeight: video.videoHeight,
+              paused: video.paused,
+              currentTime: video.currentTime,
+              duration: video.duration
+            });
+            
+            // スキャン開始を即座に実行（強制開始フラグ付き）
+            console.log("🚀 スキャンを強制開始します");
+            startScanning(true);
+            
+          } catch (playErr) {
+            console.error("❌ onloadedmetadata内でのビデオ再生エラー:", playErr);
+            setError(`ビデオの再生に失敗しました: ${playErr instanceof Error ? playErr.message : String(playErr)}`);
+          }
+        };
+        
+        // 🆕 複数の方法でビデオの準備を試行
+        const initializeVideo = async () => {
+          try {
+            console.log("🎬 ビデオ初期化開始");
+            
+            // 即座にplay()を試行（macOS Chrome対策）
+            console.log("🎯 即座にvideo.play()を実行（メタデータ待ちなし）");
+            await video.play();
+            console.log("✅ 即座再生成功");
+            
+            // 短時間待機してサイズ情報取得を試行
+            let retryCount = 0;
+            const maxRetries = 50; // 5秒間試行
+            
+            const checkVideoSize = () => {
+              console.log(`🔍 ビデオサイズチェック ${retryCount + 1}/${maxRetries}:`, {
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                readyState: video.readyState,
+                currentTime: video.currentTime,
+                paused: video.paused
+              });
+              
+              if (video.videoWidth > 0 && video.videoHeight > 0) {
+                console.log("✅ ビデオサイズ取得成功!");
+                setVideoReady(true);
+                setScanning(true);
+                startScanning(true);
+                return;
+              }
+              
+              retryCount++;
+              if (retryCount < maxRetries) {
+                setTimeout(checkVideoSize, 100);
+              } else {
+                console.warn("⚠️ ビデオサイズ取得タイムアウト - 強制的にスキャン開始");
+                // サイズが0でも強制的にスキャンを開始（一部環境では動作する場合がある）
+                setVideoReady(true);
+                setScanning(true);
+                startScanning(true);
+              }
+            };
+            
+            // サイズチェック開始
+            checkVideoSize();
+            
+          } catch (immediatePlayErr) {
+            console.log("⚠️ 即座再生失敗、従来方式にフォールバック:", immediatePlayErr);
+            
+            // 従来の loadedmetadata イベント待ちにフォールバック
+            video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+            
+            // さらなるフォールバック：複数のイベントでplay()を試行
+            const tryPlayOnEvent = async (eventName: string) => {
+              console.log(`🎯 ${eventName}イベントでplay()試行`);
+              try {
+                await video.play();
+                console.log(`✅ ${eventName}でのplay()成功`);
+              } catch (err) {
+                console.log(`⚠️ ${eventName}でのplay()失敗:`, err);
+              }
+            };
+            
+            ['loadeddata', 'canplay', 'canplaythrough'].forEach(eventName => {
+              video.addEventListener(eventName, () => tryPlayOnEvent(eventName), { once: true });
+            });
+            
+            // 最終フォールバック：タイマーで定期的にplay()を試行
+            let playRetryCount = 0;
+            const maxPlayRetries = 20;
+            
+            const retryPlay = async () => {
+              if (video.paused && playRetryCount < maxPlayRetries) {
+                playRetryCount++;
+                console.log(`🔄 play()再試行 ${playRetryCount}/${maxPlayRetries}`);
+                try {
+                  await video.play();
+                  console.log("✅ 再試行play()成功");
+                  
+                  // 成功後のサイズチェック
+                  setTimeout(() => {
+                    if (video.videoWidth > 0) {
+                      setVideoReady(true);
+                      setScanning(true);
+                      startScanning(true);
+                    }
+                  }, 500);
+                } catch (err) {
+                  console.log(`⚠️ 再試行${playRetryCount}失敗:`, err);
+                  setTimeout(retryPlay, 500);
+                }
+              } else if (playRetryCount >= maxPlayRetries) {
+                console.warn("⚠️ play()再試行回数上限に達しました");
+              }
+            };
+            
+            setTimeout(retryPlay, 1000);
+          }
+        };
+        
+        // ビデオ初期化実行
+        await initializeVideo();
         
         // 接続維持のためのイベントリスナー追加
         video.addEventListener('pause', () => {
@@ -523,31 +698,29 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         
         video.addEventListener('ended', () => {
           console.warn("⚠️ ビデオストリームが終了しました");
+          // ストリーム終了時の自動再接続
+          if (scanning) {
+            console.log("🔄 ストリーム終了による自動再接続開始");
+            setTimeout(() => startCamera(), 1000);
+          }
         });
         
-        console.log("⏳ ビデオ再生開始を待機中...");
-        
-        try {
-          // ビデオの準備完了を待機
-          await waitForVideo(video);
-          
-          console.log("🎬 ビデオ完全準備完了、スキャン開始");
-          
-          // 状態を更新
-          setScanning(true);
-          setVideoReady(true);
-          
-          // スキャン開始を即座に実行（強制開始フラグ付き）
-          console.log("🚀 スキャンを強制開始します");
-          startScanning(true);
-          
-        } catch (playErr) {
-          console.error("❌ ビデオ再生エラー:", playErr);
-          const errorMessage = `ビデオの再生に失敗しました: ${playErr instanceof Error ? playErr.message : String(playErr)}`;
-          setError(errorMessage);
-          onError?.(errorMessage);
-          stopExistingStream();
+        // すでにメタデータが読み込まれている場合の処理（従来のフォールバック用）
+        if (video.readyState >= 1) {
+          console.log("🚀 メタデータがすでに読み込み済み - 追加チェック実行");
+          setTimeout(() => {
+            if (video.videoWidth > 0 && !videoReady) {
+              console.log("✅ 遅延ビデオサイズ取得成功");
+              setVideoReady(true);
+              setScanning(true);
+              startScanning(true);
+            }
+          }, 1000);
         }
+        
+      } else {
+        console.error("❌ videoRef.current が存在しません");
+        throw new Error("ビデオ要素が見つかりません");
       }
     } catch (err) {
       console.error("❌ Camera access error:", err);
@@ -578,7 +751,7 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
         onError?.(errorMessage);
       }
     }
-  }, [mounted, cameraPermission, requestCameraPermission, waitForVideo, startScanning, stopExistingStream, onError, scanning]);
+  }, [mounted, cameraPermission, requestCameraPermission, startScanning, stopExistingStream, onError, scanning, videoReady]);
 
   // カメラストリームを停止
   const stopCamera = useCallback(() => {
@@ -638,6 +811,41 @@ export const useProductScanner = (options: UseProductScannerOptions = {}): UsePr
       checkCameraPermission();
     }
   }, [mounted, checkCameraPermission]);
+
+  // videoRef のマウント状態を監視してデバッグ情報を出力
+  useEffect(() => {
+    if (mounted && videoRef.current) {
+      const video = videoRef.current;
+      console.log("🔍 videoRef マウント確認:", {
+        videoElement: !!video,
+        srcObject: !!video.srcObject,
+        readyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        paused: video.paused,
+        currentTime: video.currentTime
+      });
+      
+      // 定期的なデバッグ情報出力（開発環境のみ）
+      if (process.env.NODE_ENV === 'development') {
+        const debugInterval = setInterval(() => {
+          if (video && scanning) {
+            console.log("🔄 ビデオ状態監視:", {
+              srcObject: !!video.srcObject,
+              readyState: video.readyState,
+              videoWidth: video.videoWidth,
+              videoHeight: video.videoHeight,
+              paused: video.paused,
+              currentTime: video.currentTime,
+              scanCount
+            });
+          }
+        }, 5000); // 5秒ごと
+        
+        return () => clearInterval(debugInterval);
+      }
+    }
+  }, [mounted, scanning, scanCount]);
 
   return {
     // 状態
