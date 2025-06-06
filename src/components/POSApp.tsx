@@ -10,15 +10,6 @@ interface PurchaseItem {
   quantity: number;
 }
 
-// 取引結果の型定義
-interface TransactionResult {
-  transaction_id: string;
-  total_amount: number;
-  timestamp: string;
-  error?: boolean;
-  error_message?: string;
-}
-
 // 画面の種類
 type AppScreen = 'home' | 'scanner' | 'product-detail' | 'cart' | 'purchase-complete';
 
@@ -373,10 +364,8 @@ const CartScreen: React.FC<{
 
 // 購入完了画面コンポーネント
 const PurchaseCompleteScreen: React.FC<{
-  transaction?: TransactionResult | null;
-  purchaseItems?: PurchaseItem[];
   onReturnHome: () => void;
-}> = ({ transaction, purchaseItems = [], onReturnHome }) => {
+}> = ({ onReturnHome }) => {
   const [countdown, setCountdown] = useState(30);
 
   useEffect(() => {
@@ -445,9 +434,6 @@ const POSApp: React.FC = () => {
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
   const [processingPurchase, setProcessingPurchase] = useState(false);
   
-  // 取引完了状態
-  const [lastTransaction, setLastTransaction] = useState<TransactionResult | null>(null);
-
   // 認証状態
   const [authenticating, setAuthenticating] = useState(false);
 
@@ -456,7 +442,6 @@ const POSApp: React.FC = () => {
     setCurrentScreen('home');
     setProduct(null);
     setError('');
-    setLastTransaction(null);
     setAuthenticating(false);
   }, []);
 
@@ -526,21 +511,16 @@ const POSApp: React.FC = () => {
     
     setProcessingPurchase(true);
     
-    // 購入データをローカルに保存（APIエラー時の備え）
-    const currentPurchaseItems = [...purchaseItems];
-    const localTotalAmount = currentPurchaseItems.reduce((sum, item) => sum + (item.product.PRICE * item.quantity), 0);
-    
     try {
       const purchaseData = {
         emp_cd: 'guest',
-        items: currentPurchaseItems.map(item => ({
+        items: purchaseItems.map(item => ({
           prd_code: item.product.CODE,
           qty: item.quantity
         }))
       };
 
       console.log("購入データ送信:", purchaseData);
-      console.log("ローカル計算合計:", localTotalAmount);
       
       const response = await fetch('https://app-step4-34.azurewebsites.net/purchase', {
         method: 'POST',
@@ -553,59 +533,18 @@ const POSApp: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         console.log("購入処理成功:", result);
-        
-        // APIレスポンスを取引結果に設定
-        setLastTransaction({
-          transaction_id: result.transaction_id || `LOCAL_${Date.now()}`,
-          total_amount: result.total_amount || localTotalAmount,
-          timestamp: result.timestamp || new Date().toISOString(),
-          ...result
-        });
-        
-        console.log("取引結果設定完了:", {
-          api_total: result.total_amount,
-          local_total: localTotalAmount,
-          final_total: result.total_amount || localTotalAmount
-        });
-        
       } else {
         const errorText = await response.text();
         console.error("購入処理エラー:", errorText);
-        
-        // APIエラーでもローカルデータで取引完了として扱う
-        setLastTransaction({
-          transaction_id: `LOCAL_${Date.now()}`,
-          total_amount: localTotalAmount,
-          timestamp: new Date().toISOString(),
-          error: true,
-          error_message: `API Error: ${response.status}`
-        });
-        
-        console.log("ローカル取引結果で継続:", { localTotalAmount });
       }
-      
-      // 購入完了画面に遷移（成功・失敗に関わらず）
-      setCurrentScreen('purchase-complete');
       
     } catch (err) {
       console.error("Purchase error:", err);
-      
-      // 接続エラーでもローカルデータで取引完了として扱う
-      setLastTransaction({
-        transaction_id: `LOCAL_${Date.now()}`,
-        total_amount: localTotalAmount,
-        timestamp: new Date().toISOString(),
-        error: true,
-        error_message: `Network Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-      });
-      
-      console.log("エラー時ローカル取引結果:", { localTotalAmount });
-      
+    } finally {
       // 購入完了画面に遷移
       setCurrentScreen('purchase-complete');
       
-    } finally {
-      // 購入リストをクリア（成功・失敗に関わらず）
+      // 購入リストをクリア
       setPurchaseItems([]);
       setProduct(null);
       setProcessingPurchase(false);
@@ -707,8 +646,6 @@ const POSApp: React.FC = () => {
       case 'purchase-complete':
         return (
           <PurchaseCompleteScreen
-            transaction={lastTransaction}
-            purchaseItems={purchaseItems}
             onReturnHome={handleReturnHome}
           />
         );
