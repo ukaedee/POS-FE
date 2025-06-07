@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import { Camera, Package, CheckCircle, ArrowLeft, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
+import { Camera, Package, CheckCircle, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
 import { Product } from '../types/product';
 import BarcodeScannerModal from './BarcodeScannerModal';
+import Image from 'next/image';
 
 // POS設定の定数
 const POS_CONFIG = {
@@ -33,7 +34,7 @@ const HomeScreen: React.FC<{
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Package className="w-8 h-8 text-gray-800" />
-            <h3 className="text-3xl font-bold text-gray-800">POSシステム</h3>
+            <h1 className="text-3xl font-bold text-gray-800">POSシステム</h1>
           </div>
           <button
             onClick={onCartClick}
@@ -164,10 +165,12 @@ const ProductDetailScreen: React.FC<{
             {/* 商品画像エリア */}
             <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
               {!imageError ? (
-                <img
+                <Image
                   src={`/images/${product.CODE}.png`}
                   alt={`商品コード ${product.CODE}`}
                   onError={handleImageError}
+                  width={256}
+                  height={256}
                   className="w-full h-full object-contain"
                 />
               ) : (
@@ -319,10 +322,12 @@ const CartScreen: React.FC<{
                     {/* 商品画像 */}
                     <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       {!imageErrors.has(item.product.CODE) ? (
-                        <img
+                        <Image
                           src={`/images/${item.product.CODE}.png`}
                           alt={`商品コード ${item.product.CODE}`}
                           onError={() => handleImageError(item.product.CODE)}
+                          width={96}
+                          height={96}
                           className="w-full h-full object-contain"
                         />
                       ) : (
