@@ -4,6 +4,13 @@ import { Camera, Package, CheckCircle, ArrowLeft, Plus, ShoppingCart, Minus, Tra
 import { Product } from '../types/product';
 import BarcodeScannerModal from './BarcodeScannerModal';
 
+// POS設定の定数
+const POS_CONFIG = {
+  STORE_CD: '30',  // 店舗コード
+  POS_NO: '90',    // POS機ID
+  EMP_CD: 'guest'  // 従業員コード（デフォルト）
+} as const;
+
 // 購入アイテムの型定義
 interface PurchaseItem {
   product: Product;
@@ -531,7 +538,9 @@ const POSApp: React.FC = () => {
     
     try {
       const purchaseData = {
-        emp_cd: 'guest',
+        emp_cd: POS_CONFIG.EMP_CD,
+        store_cd: POS_CONFIG.STORE_CD,
+        pos_no: POS_CONFIG.POS_NO,
         items: purchaseItems.map(item => ({
           prd_code: item.product.CODE,
           qty: item.quantity
