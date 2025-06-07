@@ -89,7 +89,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-200">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
             <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
-            <span className="hidden sm:inline">QRコードスキャナー</span>
+            <span className="hidden sm:inline">QRコードスキャン</span>
             <span className="sm:hidden">スキャナー</span>
           </h2>
           <button
@@ -159,13 +159,16 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   type="text"
                   value={manualInput}
                   onChange={(e) => setManualInput(e.target.value)}
-                  placeholder="QRコード・バーコード番号を入力"
+                  placeholder="QRコード番号を入力"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   maxLength={50}
                 />
                 <button
                   type="submit"
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+                  className="text-white px-4 py-2 rounded-lg transition-all duration-200 font-bold flex items-center gap-1 shadow-lg hover:shadow-xl"
+                  style={{
+                    background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
+                  }}
                 >
                   <FileText className="w-4 h-4" />
                   確認

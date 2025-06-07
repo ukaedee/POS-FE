@@ -29,11 +29,11 @@ const HomeScreen: React.FC<{
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* ヘッダー */}
-      <div className="bg-white shadow-md p-6">
+      <div className="bg-white shadow-md p-3">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <Package className="w-8 h-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-800">POSシステム</h1>
+            <Package className="w-8 h-8 text-gray-800" />
+            <h3 className="text-3xl font-bold text-gray-800">POSシステム</h3>
           </div>
           <button
             onClick={onCartClick}
@@ -41,7 +41,7 @@ const HomeScreen: React.FC<{
           >
             <ShoppingCart className="w-8 h-8 text-gray-600" />
             {cartItemCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-gray-800 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
                 {cartItemCount}
               </span>
             )}
@@ -53,8 +53,8 @@ const HomeScreen: React.FC<{
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-md w-full space-y-6">
           <div className="text-center">
-            <div className="w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Camera className="w-16 h-16 text-blue-600" />
+            <div className="w-32 h-32 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Camera className="w-16 h-16 text-gray-700" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">商品をスキャン</h2>
             <p className="text-gray-600">QRコードを読み取って商品を追加</p>
@@ -62,7 +62,10 @@ const HomeScreen: React.FC<{
 
           <button
             onClick={onStartScan}
-            className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl hover:bg-blue-700 transition-colors font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
+            className="w-full text-white py-4 px-6 rounded-xl transition-all duration-200 font-bold text-lg flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
+            style={{
+              background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
+            }}
           >
             <Camera className="w-6 h-6" />
             スキャン開始
@@ -119,18 +122,18 @@ const ProductDetailScreen: React.FC<{
           <div className="flex items-center justify-between">
             <button
               onClick={onHomeClick}
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-lg transition-colors"
+              className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
             >
               <Package className="w-6 h-6" />
               POS APP
             </button>
-            <h1 className="text-xl font-bold">商品詳細</h1>
+
             <div></div>
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-red-500 text-6xl mb-4">❌</div>
+            <div className="text-gray-500 text-6xl mb-4">❌</div>
             <p className="text-gray-600 text-lg">商品が見つかりませんでした</p>
           </div>
         </div>
@@ -145,12 +148,11 @@ const ProductDetailScreen: React.FC<{
         <div className="flex items-center justify-between">
           <button
             onClick={onHomeClick}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-lg transition-colors"
+            className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
           >
             <Package className="w-6 h-6" />
             POS APP
           </button>
-          <h1 className="text-xl font-bold">商品詳細</h1>
           <div></div>
         </div>
       </div>
@@ -192,7 +194,7 @@ const ProductDetailScreen: React.FC<{
 
               <div>
                 <p className="text-gray-600 text-sm">価格</p>
-                <p className="text-3xl font-bold text-blue-600">¥{product.PRICE.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-gray-800">¥{product.PRICE.toLocaleString()}</p>
               </div>
 
               {/* 数量選択 */}
@@ -230,7 +232,10 @@ const ProductDetailScreen: React.FC<{
           <button
             onClick={handleAddToCart}
             disabled={(product.STOCK || 0) <= 0}
-            className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3"
+            className="w-full text-white py-4 px-6 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl"
+            style={{
+              background: (product.STOCK || 0) <= 0 ? '#9ca3af' : 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
+            }}
           >
             <Plus className="w-6 h-6" />
             {(product.STOCK || 0) <= 0 ? '在庫切れ' : 'カートに追加'}
@@ -285,7 +290,7 @@ const CartScreen: React.FC<{
         <div className="flex items-center justify-between">
           <button
             onClick={onHomeClick}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-lg transition-colors"
+            className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
           >
             <Package className="w-6 h-6" />
             POS APP
@@ -328,7 +333,7 @@ const CartScreen: React.FC<{
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-gray-800">{item.product.NAME}</h3>
                       <p className="text-sm text-gray-500 font-mono">{item.product.CODE}</p>
-                      <p className="text-lg font-bold text-blue-600">¥{item.product.PRICE.toLocaleString()}</p>
+                      <p className="text-lg font-bold text-gray-800">¥{item.product.PRICE.toLocaleString()}</p>
                     </div>
                     
                     <div className="flex flex-col items-center space-y-2">
@@ -396,7 +401,7 @@ const CartScreen: React.FC<{
               <div className="border-t pt-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xl font-bold">合計金額</span>
-                  <span className="text-2xl font-bold text-green-600">¥{taxIncludedTotal.toLocaleString()}</span>
+                  <span className="text-2xl font-bold text-gray-800">¥{taxIncludedTotal.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -404,7 +409,10 @@ const CartScreen: React.FC<{
             <button
               onClick={onCheckout}
               disabled={processing}
-              className="w-full bg-green-600 text-white py-4 px-6 rounded-xl hover:bg-green-700 disabled:opacity-50 font-bold text-lg flex items-center justify-center gap-3"
+              className="w-full text-white py-4 px-6 rounded-xl disabled:opacity-50 font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl"
+              style={{
+                background: processing ? '#9ca3af' : 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
+              }}
             >
               {processing ? (
                 <>
@@ -452,8 +460,8 @@ const PurchaseCompleteScreen: React.FC<{
         <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
           {/* 成功アイコンとタイトル */}
           <div className="text-center">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-12 h-12 text-green-600" />
+            <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-12 h-12 text-gray-700" />
             </div>
             
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
@@ -469,9 +477,12 @@ const PurchaseCompleteScreen: React.FC<{
           <div className="space-y-3">
             <button
               onClick={onReturnHome}
-              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="w-full text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+              style={{
+                background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
+              }}
             >
-              すぐにトップに戻る
+              トップに戻る
             </button>
           </div>
         </div>
@@ -732,7 +743,7 @@ const POSApp: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-2xl p-8 max-w-sm mx-4 text-center">
             <div className="mb-6">
-              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-16 h-16 border-4 border-gray-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">認証中...</h3>
             <p className="text-gray-600 text-sm">商品情報を確認しています</p>
