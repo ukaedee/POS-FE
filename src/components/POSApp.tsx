@@ -17,7 +17,8 @@ type AppScreen = 'home' | 'scanner' | 'product-detail' | 'cart' | 'purchase-comp
 const HomeScreen: React.FC<{
   onStartScan: () => void;
   cartItemCount: number;
-}> = ({ onStartScan, cartItemCount }) => {
+  onCartClick: () => void;
+}> = ({ onStartScan, cartItemCount, onCartClick }) => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* ヘッダー */}
@@ -27,14 +28,17 @@ const HomeScreen: React.FC<{
             <Package className="w-8 h-8 text-blue-600" />
             <h1 className="text-3xl font-bold text-gray-800">POSシステム</h1>
           </div>
-          {cartItemCount > 0 && (
-            <div className="relative">
-              <ShoppingCart className="w-8 h-8 text-gray-600" />
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+          <button
+            onClick={onCartClick}
+            className="relative hover:bg-gray-100 p-2 rounded-lg transition-colors"
+          >
+            <ShoppingCart className="w-8 h-8 text-gray-600" />
+            {cartItemCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
                 {cartItemCount}
               </span>
-            </div>
-          )}
+            )}
+          </button>
         </div>
       </div>
 
@@ -46,7 +50,7 @@ const HomeScreen: React.FC<{
               <Camera className="w-16 h-16 text-blue-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">商品をスキャン</h2>
-            <p className="text-gray-600">バーコードやQRコードを読み取って商品を追加</p>
+            <p className="text-gray-600">QRコードを読み取って商品を追加</p>
           </div>
 
           <button
@@ -210,12 +214,14 @@ const ProductDetailScreen: React.FC<{
 // カート画面コンポーネント
 const CartScreen: React.FC<{
   items: PurchaseItem[];
-  onBack: () => void;
+  onHomeClick: () => void;
   onUpdateQuantity: (productCode: string, quantity: number) => void;
   onRemoveItem: (productCode: string) => void;
   onCheckout: () => void;
+  onStartScan: () => void;
   processing?: boolean;
-}> = ({ items, onBack, onUpdateQuantity, onRemoveItem, onCheckout, processing = false }) => {
+  totalItemCount: number;
+}> = ({ items, onHomeClick, onUpdateQuantity, onRemoveItem, onCheckout, onStartScan, processing = false, totalItemCount }) => {
   const totalAmount = items.reduce((sum, item) => sum + (item.product.PRICE * item.quantity), 0);
   const tax = Math.floor(totalAmount * 0.1);
   const taxIncludedTotal = totalAmount + tax;
@@ -236,26 +242,38 @@ const CartScreen: React.FC<{
       <div className="bg-white shadow-md p-4">
         <div className="flex items-center justify-between">
           <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+            onClick={onHomeClick}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold text-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
-            戻る
+            <Package className="w-6 h-6" />
+            POS APP
           </button>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <ShoppingCart className="w-6 h-6" />
-            カート ({items.length}点)
+            カート ({totalItemCount}点)
           </h1>
+          <div></div>
         </div>
       </div>
 
       {/* 商品リスト */}
       <div className="flex-1 p-4">
         <div className="max-w-2xl mx-auto">
+          {/* 商品を追加ボタン */}
+          <div className="mb-4">
+            <button
+              onClick={onStartScan}
+              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-3"
+            >
+              <Camera className="w-6 h-6" />
+              商品を追加
+            </button>
+          </div>
+
           {items.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600">カートに商品がありません</p>
+              <p className="text-gray-600">まだカートに商品がありません</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -314,7 +332,7 @@ const CartScreen: React.FC<{
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-600">買上点数</span>
-                <span className="font-bold">{items.length}点</span>
+                <span className="font-bold">{totalItemCount}点</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">小計</span>
@@ -601,15 +619,6 @@ const POSApp: React.FC = () => {
     setError('');
   };
 
-  // カート画面から戻る
-  const handleBackFromCart = () => {
-    if (product) {
-      setCurrentScreen('product-detail');
-    } else {
-      setCurrentScreen('home');
-    }
-  };
-
   // 画面レンダリング
   const renderScreen = () => {
     switch (currentScreen) {
@@ -617,7 +626,8 @@ const POSApp: React.FC = () => {
         return (
           <HomeScreen 
             onStartScan={startNewScan}
-            cartItemCount={purchaseItems.length}
+            cartItemCount={purchaseItems.reduce((sum, item) => sum + item.quantity, 0)}
+            onCartClick={() => setCurrentScreen('cart')}
           />
         );
       
@@ -632,14 +642,17 @@ const POSApp: React.FC = () => {
         );
       
       case 'cart':
+        const totalItemCount = purchaseItems.reduce((sum, item) => sum + item.quantity, 0);
         return (
           <CartScreen
             items={purchaseItems}
-            onBack={handleBackFromCart}
+            onHomeClick={handleReturnHome}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             onCheckout={processPurchase}
+            onStartScan={startNewScan}
             processing={processingPurchase}
+            totalItemCount={totalItemCount}
           />
         );
       
