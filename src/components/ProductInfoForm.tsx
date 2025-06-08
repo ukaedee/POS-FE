@@ -34,7 +34,7 @@ const ProductInfoForm: React.FC<ProductInfoFormProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-xs p-6">
       <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
         <Package className="w-6 h-6 text-blue-600" />
         商品情報

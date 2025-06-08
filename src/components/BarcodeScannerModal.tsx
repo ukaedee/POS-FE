@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Camera, FileText, CheckCircle } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import PrimaryButton from './ui/PrimaryButton';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -84,7 +85,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg h-full max-h-[95vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white rounded-lg w-full max-w-lg h-hug max-h-[95vh] overflow-y-auto shadow-2xl">
         {/* ヘッダー */}
         <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-200">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -163,16 +164,13 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   maxLength={50}
                 />
-                <button
+                <PrimaryButton
                   type="submit"
-                  className="text-white px-4 py-2 rounded-lg transition-all duration-200 font-bold flex items-center gap-1 shadow-lg hover:shadow-xl"
-                  style={{
-                    background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
-                  }}
+                  className="w-full"
                 >
                   <FileText className="w-4 h-4" />
                   確認
-                </button>
+                </PrimaryButton>
               </div>
             </form>
           </div>

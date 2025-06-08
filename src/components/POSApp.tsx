@@ -1,9 +1,15 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import { Camera, Package, CheckCircle, Plus, ShoppingCart, Minus, Trash2, CreditCard } from 'lucide-react';
+import { Camera, Package, CheckCircle, Plus, ShoppingCart } from 'lucide-react';
 import { Product } from '../types/product';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import Image from 'next/image';
+import SecondaryButton from './ui/SecondaryButton';
+import PrimaryButton from './ui/PrimaryButton';
+import Header from './ui/Header';
+import QuantitySelector from './ui/QuantitySelector';
+import BottomArea from './ui/BottomArea';
+import ProductCard from './ui/ProductCard';
 
 // POS設定の定数
 const POS_CONFIG = {
@@ -28,49 +34,35 @@ const HomeScreen: React.FC<{
   onCartClick: () => void;
 }> = ({ onStartScan, cartItemCount, onCartClick }) => {
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* ヘッダー */}
-      <div className="bg-white shadow-md p-3">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Package className="w-8 h-8 text-gray-800" />
-            <h1 className="text-3xl font-bold text-gray-800">POSシステム</h1>
-          </div>
-          <button
-            onClick={onCartClick}
-            className="relative hover:bg-gray-100 p-2 rounded-lg transition-colors"
-          >
-            <ShoppingCart className="w-8 h-8 text-gray-600" />
-            {cartItemCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-gray-800 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                {cartItemCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
+      <Header
+        onLogoClick={undefined}
+        onCartClick={onCartClick}
+        cartCount={cartItemCount}
+        cartActive={false}
+        cartDisabled={false}
+      />
 
       {/* メインコンテンツ */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-md w-full space-y-6">
           <div className="text-center">
-            <div className="w-32 h-32 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mx-auto mb-6">
               <Camera className="w-16 h-16 text-gray-700" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">商品をスキャン</h2>
             <p className="text-gray-600">QRコードを読み取って商品を追加</p>
           </div>
-
-          <button
-            onClick={onStartScan}
-            className="w-full text-white py-4 px-6 rounded-xl transition-all duration-200 font-bold text-lg flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
-            style={{
-              background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
-            }}
-          >
+        </div>
+      </div>
+      {/* スキャン開始ボタンを中央下部に固定配置 */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full flex justify-center z-20">
+        <div className="max-w-md w-[90vw]">
+          <PrimaryButton onClick={onStartScan} className="w-full py-5 text-xl">
             <Camera className="w-6 h-6" />
             スキャン開始
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -84,16 +76,27 @@ const ProductDetailScreen: React.FC<{
   onAddToCart: (product: Product, quantity: number) => void;
   onStartScan: () => void;
   loading?: boolean;
-}> = ({ product, onHomeClick, onAddToCart, onStartScan, loading = false }) => {
+  cartCount: number;
+}> = ({ product, onHomeClick, onAddToCart, onStartScan, loading = false, cartCount }) => {
   const [quantity, setQuantity] = useState(1);
   const [imageError, setImageError] = useState(false);
+  const [countdown, setCountdown] = useState(5);
 
-  const handleQuantityChange = (delta: number) => {
-    const newQuantity = quantity + delta;
-    if (newQuantity >= 1 && newQuantity <= (product?.STOCK || 999)) {
-      setQuantity(newQuantity);
+  useEffect(() => {
+    if (!product && !loading) {
+      const timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+
+      return () => clearInterval(timer);
     }
-  };
+  }, [product, loading]);
+
+  useEffect(() => {
+    if (countdown <= 0 && !product && !loading) {
+      onHomeClick();
+    }
+  }, [countdown, product, loading, onHomeClick]);
 
   const handleAddToCart = () => {
     if (product && quantity > 0) {
@@ -107,7 +110,7 @@ const ProductDetailScreen: React.FC<{
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">商品情報を取得中...</p>
@@ -118,24 +121,19 @@ const ProductDetailScreen: React.FC<{
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-100 flex flex-col">
-        <div className="bg-white shadow-md p-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={onHomeClick}
-              className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
-            >
-              <Package className="w-6 h-6" />
-              POS APP
-            </button>
-
-            <div></div>
-          </div>
-        </div>
+      <div className="min-h-screen flex flex-col">
+        <Header
+          onLogoClick={onHomeClick}
+          onCartClick={undefined}
+          cartCount={cartCount}
+          cartActive={false}
+          cartDisabled={true}
+        />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="text-gray-500 text-6xl mb-4">❌</div>
             <p className="text-gray-600 text-lg">商品が見つかりませんでした</p>
+            <p className="text-gray-500 text-sm mt-2">{countdown}秒後にトップに戻ります</p>
           </div>
         </div>
       </div>
@@ -143,27 +141,30 @@ const ProductDetailScreen: React.FC<{
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* ヘッダー */}
-      <div className="bg-white shadow-md p-4">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onHomeClick}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
-          >
-            <Package className="w-6 h-6" />
-            POS APP
-          </button>
-          <div></div>
-        </div>
+      <Header
+        onLogoClick={onHomeClick}
+        onCartClick={undefined}
+        cartCount={cartCount}
+        cartActive={false}
+        cartDisabled={true}
+      />
+
+      {/* 別の商品をスキャンボタン（上部） */}
+      <div className="max-w-md w-full mx-auto mt-4 px-4">
+        <SecondaryButton onClick={onStartScan}>
+          <Camera className="w-6 h-6" />
+          商品をスキャン
+        </SecondaryButton>
       </div>
 
       {/* 商品詳細 */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 pb-40">
         <div className="max-w-md mx-auto">
-          <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
+          <div className="bg-white space-y-6">
             {/* 商品画像エリア */}
-            <div className="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+            <div className="w-full h-40 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
               {!imageError ? (
                 <Image
                   src={`/images/${product.CODE}.png`}
@@ -203,23 +204,13 @@ const ProductDetailScreen: React.FC<{
               {/* 数量選択 */}
               <div className="space-y-3">
                 <p className="text-gray-700 font-medium">数量</p>
-                <div className="flex items-center justify-center gap-4">
-                  <button
-                    onClick={() => handleQuantityChange(-1)}
-                    disabled={quantity <= 1}
-                    className="w-12 h-12 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded-full"
-                  >
-                    <Minus className="w-5 h-5" />
-                  </button>
-                  <span className="text-2xl font-bold w-16 text-center">{quantity}</span>
-                  <button
-                    onClick={() => handleQuantityChange(1)}
-                    disabled={quantity >= (product.STOCK || 999)}
-                    className="w-12 h-12 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded-full"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
+                <QuantitySelector
+                  value={quantity}
+                  min={1}
+                  max={product.STOCK || 999}
+                  onChange={setQuantity}
+                  size="L"
+                />
                 <p className="text-center text-gray-600 text-sm">
                   小計: ¥{(product.PRICE * quantity).toLocaleString()}
                 </p>
@@ -229,30 +220,20 @@ const ProductDetailScreen: React.FC<{
         </div>
       </div>
 
-      {/* 追加ボタン */}
-      <div className="p-6 bg-white border-t">
-        <div className="max-w-md mx-auto space-y-3">
-          <button
+      {/* 追加ボタン（下部固定） */}
+      <BottomArea>
+        <div className="max-w-md mx-auto p-6 space-y-3">
+          <PrimaryButton
             onClick={handleAddToCart}
             disabled={(product.STOCK || 0) <= 0}
-            className="w-full text-white py-4 px-6 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl"
-            style={{
-              background: (product.STOCK || 0) <= 0 ? '#9ca3af' : 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
-            }}
+            className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: (product.STOCK || 0) <= 0 ? '#9ca3af' : undefined }}
           >
             <Plus className="w-6 h-6" />
             {(product.STOCK || 0) <= 0 ? '在庫切れ' : 'カートに追加'}
-          </button>
-          
-          <button
-            onClick={onStartScan}
-            className="w-full bg-gray-200 text-gray-700 py-3 px-6 rounded-xl hover:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-3"
-          >
-            <Camera className="w-6 h-6" />
-            別の商品をスキャン
-          </button>
+          </PrimaryButton>
         </div>
-      </div>
+      </BottomArea>
     </div>
   );
 };
@@ -266,7 +247,8 @@ const CartScreen: React.FC<{
   onCheckout: () => void;
   processing?: boolean;
   totalItemCount: number;
-}> = ({ items, onHomeClick, onUpdateQuantity, onRemoveItem, onCheckout, processing = false, totalItemCount }) => {
+  onStartScan: () => void;
+}> = ({ items, onHomeClick, onUpdateQuantity, onRemoveItem, onCheckout, processing = false, totalItemCount, onStartScan }) => {
   const totalAmount = items.reduce((sum, item) => sum + (item.product.PRICE * item.quantity), 0);
   const tax = Math.floor(totalAmount * 0.1);
   const taxIncludedTotal = totalAmount + tax;
@@ -287,152 +269,79 @@ const CartScreen: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* ヘッダー */}
-      <div className="bg-white shadow-md p-4">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onHomeClick}
-            className="flex items-center gap-2 text-gray-800 hover:text-gray-600 font-bold text-lg transition-colors"
-          >
-            <Package className="w-6 h-6" />
-            POS APP
-          </button>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShoppingCart className="w-6 h-6" />
-            カート ({totalItemCount}点)
-          </h1>
-          <div></div>
-        </div>
-      </div>
+      <Header
+        onLogoClick={onHomeClick}
+        onCartClick={undefined}
+        cartCount={totalItemCount}
+        cartActive={true}
+        cartDisabled={true}
+      />
 
-      {/* 商品リスト */}
-      <div className="flex-1 p-4">
-        <div className="max-w-2xl mx-auto">
-          {items.length === 0 ? (
-            <div className="text-center py-12">
-              <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600">まだカートに商品がありません</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {items.map((item) => (
-                <div key={item.product.CODE} className="bg-white rounded-lg p-4 shadow">
-                  <div className="flex items-center gap-4">
-                    {/* 商品画像 */}
-                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {!imageErrors.has(item.product.CODE) ? (
-                        <Image
-                          src={`/images/${item.product.CODE}.png`}
-                          alt={`商品コード ${item.product.CODE}`}
-                          onError={() => handleImageError(item.product.CODE)}
-                          width={96}
-                          height={96}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <Package className="w-8 h-8 text-gray-400" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-800">{item.product.NAME}</h3>
-                      <p className="text-sm text-gray-500 font-mono">{item.product.CODE}</p>
-                      <p className="text-lg font-bold text-gray-800">¥{item.product.PRICE.toLocaleString()}</p>
-                    </div>
-                    
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleQuantityChange(item.product.CODE, -1)}
-                          disabled={item.quantity <= 1}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <button
-                          onClick={() => handleQuantityChange(item.product.CODE, 1)}
-                          disabled={item.quantity >= item.product.STOCK}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 disabled:opacity-50 rounded"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <p className="text-sm font-bold">
-                        ¥{(item.product.PRICE * item.quantity).toLocaleString()}
-                      </p>
-                      
-                      <button
-                        onClick={() => onRemoveItem(item.product.CODE)}
-                        className="text-red-600 hover:text-red-800 p-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 合計・購入ボタン */}
-      {items.length > 0 && (
-        <div className="bg-white border-t p-6">
-          <div className="max-w-2xl mx-auto space-y-4">
-            {/* 買上点数・小計・消費税・合計金額 */}
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">買上点数</span>
-                <span className="font-bold">{totalItemCount}点</span>
+      {/* 商品リスト（スクロール可能、スキャンボタン含む） */}
+      <div className="flex-1 p-4 pb-[216px] overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+        <div className="max-w-2xl mx-auto w-full" style={{ paddingLeft: '4px', paddingRight: '4px' }}>
+          <SecondaryButton onClick={onStartScan}>
+            <Camera className="w-6 h-6" />
+              商品をスキャン
+          </SecondaryButton>
+          <div className="mt-2 space-y-4">
+            {items.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600">まだカートに商品がありません</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">小計</span>
-                <span className="font-bold">¥{totalAmount.toLocaleString()}</span>
+            ) : (
+              <div className="space-y-4">
+                {items.map((item) => (
+                  <ProductCard
+                    key={item.product.CODE}
+                    product={item.product}
+                    quantity={item.quantity}
+                    maxQuantity={item.product.STOCK}
+                    onQuantityChange={(newValue) => handleQuantityChange(item.product.CODE, newValue - item.quantity)}
+                    onRemove={() => onRemoveItem(item.product.CODE)}
+                    imageError={imageErrors.has(item.product.CODE)}
+                    onImageError={() => handleImageError(item.product.CODE)}
+                  />
+                ))}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">消費税等</span>
-                <span className="font-bold">¥{tax.toLocaleString()}</span>
-              </div>
-              <div className="text-xs text-gray-500 ml-4">
-                (10%対象 ¥{totalAmount.toLocaleString()})
-              </div>
-              <div className="text-xs text-gray-500 ml-4">
-                (内消費税 ¥{tax.toLocaleString()})
-              </div>
-              <div className="border-t pt-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold">合計金額</span>
-                  <span className="text-2xl font-bold text-gray-800">¥{taxIncludedTotal.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={onCheckout}
-              disabled={processing}
-              className="w-full text-white py-4 px-6 rounded-xl disabled:opacity-50 font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl"
-              style={{
-                background: processing ? '#9ca3af' : 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
-              }}
-            >
-              {processing ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  処理中...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-6 h-6" />
-                  購入
-                </>
-              )}
-            </button>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* 合計・購入ボタン（下部固定・影付き） */}
+      {items.length > 0 && (
+        <BottomArea>
+          <div className="max-w-2xl mx-auto" style={{ padding: '24px' }}>
+            {/* 買上点数〜内消費税などの情報 */}
+            <div className="text-sm text-gray-700 grid grid-cols-2 gap-y-1 mb-3">
+              <span>買上点数</span><span className="text-right">{totalItemCount}点</span>
+              <span>小計</span><span className="text-right">¥{totalAmount.toLocaleString()}</span>
+              <span>消費税等</span><span className="text-right">¥{tax.toLocaleString()}</span>
+              <span className="text-xs text-gray-400">(10%対象)</span><span className="text-right text-xs text-gray-400">¥{totalAmount.toLocaleString()}</span>
+              <span className="text-xs text-gray-400">(内消費税)</span><span className="text-right text-xs text-gray-400">¥{tax.toLocaleString()}</span>
+            </div>
+            {/* Divider */}
+            <div className="border-t border-dashed border-gray-300 my-2"></div>
+            {/* 合計金額 */}
+            <div className="flex justify-between items-end mb-4">
+              <div className="text-xs text-gray-500">合計金額</div>
+              <div className="text-2xl font-bold text-gray-900">¥{taxIncludedTotal.toLocaleString()}</div>
+            </div>
+            {/* 購入ボタン */}
+            <PrimaryButton
+              onClick={onCheckout}
+              disabled={processing}
+              className="w-full"
+            >
+              <ShoppingCart className="w-6 h-6" />
+              購入
+            </PrimaryButton>
+          </div>
+        </BottomArea>
       )}
     </div>
   );
@@ -452,7 +361,6 @@ const PurchaseCompleteScreen: React.FC<{
     return () => clearInterval(timer);
   }, []);
 
-  // カウントダウンが0になったらホームに戻る
   useEffect(() => {
     if (countdown <= 0) {
       onReturnHome();
@@ -460,10 +368,9 @@ const PurchaseCompleteScreen: React.FC<{
   }, [countdown, onReturnHome]);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-lg w-full">
         <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
-          {/* 成功アイコンとタイトル */}
           <div className="text-center">
             <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-12 h-12 text-gray-700" />
@@ -478,17 +385,12 @@ const PurchaseCompleteScreen: React.FC<{
             </p>
           </div>
 
-          {/* ボタン */}
           <div className="space-y-3">
-            <button
-              onClick={onReturnHome}
-              className="w-full text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
-              style={{
-                background: 'linear-gradient(90deg, #010101 0%, #282F2E 50%, #010101 100%)'
-              }}
-            >
-              トップに戻る
-            </button>
+            <div className="flex justify-center">
+              <PrimaryButton onClick={onReturnHome} className="max-w-xs w-full mx-auto">
+                トップに戻る
+              </PrimaryButton>
+            </div>
           </div>
         </div>
       </div>
@@ -587,7 +489,14 @@ const POSApp: React.FC = () => {
   // API: 購入処理
   const processPurchase = async () => {
     if (purchaseItems.length === 0) return;
-    
+
+    // 在庫超過チェック
+    const overStockItem = purchaseItems.find(item => item.quantity > (item.product.STOCK || 0));
+    if (overStockItem) {
+      setError(`「${overStockItem.product.NAME}」の在庫が不足しています（在庫: ${overStockItem.product.STOCK}、カート: ${overStockItem.quantity}）`);
+      return;
+    }
+
     setProcessingPurchase(true);
     
     try {
@@ -695,6 +604,7 @@ const POSApp: React.FC = () => {
             onAddToCart={handleAddToPurchaseList}
             onStartScan={startNewScan}
             loading={loading}
+            cartCount={purchaseItems.reduce((sum, item) => sum + item.quantity, 0)}
           />
         );
       
@@ -709,6 +619,7 @@ const POSApp: React.FC = () => {
             onCheckout={processPurchase}
             processing={processingPurchase}
             totalItemCount={totalItemCount}
+            onStartScan={startNewScan}
           />
         );
       
@@ -725,7 +636,7 @@ const POSApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen">
       {renderScreen()}
       
       {/* エラーメッセージ */}
